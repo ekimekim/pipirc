@@ -1,0 +1,14 @@
+
+web service
+register channel by out-of-band (whisper, http?)
+	channel regs are durable!
+manage per-channel conf?
+connect via shim
+	shim identifies incoming connection (needs real auth)
+join channel on connect
+
+terms:
+	channel: irc meaning
+	client: irc meaning
+	stream: a streamer and their channel
+	user: A chat participant
