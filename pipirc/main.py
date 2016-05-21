@@ -1,13 +1,40 @@
 
 
-class IrcManager(object):
-	def __init__(self, nick, oauth):
-		self.nick = nick
-		self.oauth = oauth
-		self.clients = {} # {host: client}
+class Main(object):
+	"""Ties the main parts of the server together"""
+	def __init__(self):
+		self.ipc_server = IPCServer(self)
+		self.irc_manager = IRCHostsManager(self._recv_chat)
 
-	def send(self, host, channel, msg):
-		self.clients[host].send(channel, msg)
+	def send_chat(self, channel_name, text):
+		channel_config = self.get_channel_config(channel_name)
+		if not channel_config:
+			return
+		self.irc_manager.send(
+			channel_config.irc_host,
+			channel_config.irc_user,
+			channel_config.irc_oauth,
+			channel_config.irc_channel,
+			text,
+		)
+
+	def _recv_chat(self, channel_name, text, sender, sender_rank):
+		self.ipc_server.recv_chat(channel_name, text, sender, sender_rank)
+
+	def sync_channels(self):
+		self.irc_manager.update_connections(
+			(
+				channel_config.irc_host,
+				channel_config.irc_user,
+				channel_config.irc_oauth,
+				channel_config.irc_channel,
+			)
+			for channel_config in map(self.get_channel_config, self.ipc_server.channels)
+			 if channel_config
+		)
+
+	def get_channel_config(self, channel_name):
+		return None # TODO
 
 
 def main(*args):

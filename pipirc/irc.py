@@ -41,7 +41,7 @@ class IRCHostsManager(object):
 		# prefer twitch display-name for correct capitalization
 		sender = msg.tags.get('display-name', msg.sender)
 		sender_rank = get_sender_rank(msg.target, msg.tags)
-		self.callback(msg.target, msg.payload, sender, sender_rank)
+		self.callback(msg.target.lstrip('#'), msg.payload, sender, sender_rank)
 
 	def update_connections(self, connections):
 		"""Channels should be a set of (host, nick, oauth, channel)"""

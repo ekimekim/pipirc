@@ -31,6 +31,12 @@ class IPCServer(object):
 		"""Set of all connected channels"""
 		return set(self.channels_to_conns.keys())
 
+	def recv_chat(self, channel, text, sender, sender_rank):
+		conn = self.channels_to_conns.get(channel)
+		if not conn:
+			return
+		conn.recv_chat(channel, text, sender, sender_rank)
+
 
 class IPCConnection(GSocketClient):
 	def __init__(self, socket):
