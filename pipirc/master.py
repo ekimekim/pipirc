@@ -31,6 +31,14 @@ class IPCServer(object):
 		"""Set of all connected channels"""
 		return set(self.channels_to_conns.keys())
 
+	def _choose_conn(self):
+		"""Pick a conn to be given a new channel."""
+		# approximate least loaded as least channels
+		return min(self.conns.values(), key=lambda conn: len(conn.channels))
+
+	def open_channel(self, channel, pip_sock, **options):
+		self._choose_conn().open_channel(channel, pip_sock, **options)
+
 	def recv_chat(self, channel, text, sender, sender_rank):
 		conn = self.channels_to_conns.get(channel)
 		if not conn:
