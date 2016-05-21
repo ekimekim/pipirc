@@ -18,12 +18,18 @@ class IPCServer(object):
 			self.conns[name] = IPCMasterConnection(self, name, sock)
 
 	@property
-	def channels(self):
+	def channels_to_conns(self):
 		ret = {}
 		for conn in self.conns.values():
-			for host, channel in conn.channels:
-				ret.setdefault(host, set()).add(channel)
+			for channel in conn.channels:
+				assert channel not in ret
+				ret[channel] = conn
 		return ret
+
+	@property
+	def channels(self):
+		"""Set of all connected channels"""
+		return set(self.channels_to_conns.keys())
 
 
 class IPCConnection(GSocketClient):
@@ -51,7 +57,11 @@ class IPCConnection(GSocketClient):
 			msg['fd'] = recv_fd(self._socket)
 		msg_type = msg.pop('type')
 		if msg_type in self._handle_map:
-			self._handle_map[msg_type](**msg)
+			try:
+				self._handle_map[msg_type](**msg)
+			except Exception:
+				# TODO log
+				pass
 
 
 class IPCMasterConnection(IPCConnection):
@@ -59,7 +69,7 @@ class IPCMasterConnection(IPCConnection):
 		super(IPCMasterConnection, self).__init__(socket)
 		self.server = server
 		self.name = name
-		self.channels = set() # set of (host, channel)
+		self.channels = set() # set of channels handled by the worker we're connected to
 		self.send('init', name=name)
 		self._handle_map = {
 			'chat message': self._send_chat
@@ -67,27 +77,29 @@ class IPCMasterConnection(IPCConnection):
 		}
 		self.start()
 
-	def _stop(self):
+	def _stop(self, ex=None):
 		super(IPCMasterConnection, self)._stop()
+		for channel in self.channels:
+			self._send_chat(channel, "Something went wrong. Please reconnect.")
 		assert self.server.conns.pop(name) is self
-		self.server.main.sync_open_channels()
+		self.server.main.sync_channels()
 
-	def open_channel(self, host, channel, pip_fd, **options):
+	def open_channel(self, channel, pip_fd, **options):
 		"""Send channel info and pip protocol fd for given channel to worker process,
 		assigning the channel to this process."""
-		self.channels.add((host, channel))
-		self.server.main.sync_open_channels()
-		self.send('open channel', host=host, channel=channel, fd=pip_fd, **options)
+		self.channels.add(channel)
+		self.server.main.sync_channels()
+		self.send('open channel', channel=channel, fd=pip_fd, **options)
 
-	def _close_channel(self, host, channel):
-		self.channels.remove((host, channel))
-		self.server.main.sync_open_channels()
+	def _close_channel(self, channel):
+		self.channels.remove(channel)
+		self.server.main.sync_channels()
 
-	def _send_chat(self, host, channel, text):
-		self.server.main.send_chat(host, channel, text)
+	def _send_chat(self, channel, text):
+		self.server.main.send_chat(channel, text)
 
-	def recv_chat(self, host, channel, text, sender, sender_rank)
-		self.send('chat message', host=host, channel=channel, text=text, sender=sender, sender_rank=sender_rank)
+	def recv_chat(self, channel, text, sender, sender_rank)
+		self.send('chat message', channel=channel, text=text, sender=sender, sender_rank=sender_rank)
 
 
 class IPCWorkerConnection(IPCConnection):
@@ -95,7 +107,7 @@ class IPCWorkerConnection(IPCConnection):
 		sock = socket.socket(AF_UNIX, SOCK_STREAM)
 		sock.connect(sock_path)
 		super(IPCWorkerConnection, self).__init__(sock)
-		self.channels = {} # {(host, channel): PippyBot}
+		self.channels = {} # {channel: PippyBot}
 		self._handle_map = {
 			'init': self._init,
 			'open channel': self._open_channel,
@@ -106,17 +118,17 @@ class IPCWorkerConnection(IPCConnection):
 	def _init(self, name):
 		self.name = name
 
-	def _open_channel(self, host, channel, fd, **options):
+	def _open_channel(self, channel, fd, **options):
 		pip_sock = socket.fromfd(fd, AF_INET, SOCK_STREAM)
-		self.channels[host, channel] = PippyBot(self, pip_sock, host, channel, options)
+		self.channels[channel] = PippyBot(self, pip_sock, options)
 
-	def close_channel(self, host, channel):
-		del self.channels[host, channel]
-		self.send('close channel', host=host, channel=channel)
+	def close_channel(self, channel):
+		del self.channels[channel]
+		self.send('close channel', channel=channel)
 
-	def send_chat(self, host, channel, text):
-		self.send('chat message', host=host, channel=channel, text=text)
+	def send_chat(self, channel, text):
+		self.send('chat message', channel=channel, text=text)
 
-	def _recv_chat(self, host, channel, text, sender, sender_rank):
-		if (host, channel) in self.channels:
-			self.channels[host, channel].recv_chat(text, sender, sender_rank)
+	def _recv_chat(self, channel, text, sender, sender_rank):
+		if channel in self.channels:
+			self.channels[channel].recv_chat(text, sender, sender_rank)
