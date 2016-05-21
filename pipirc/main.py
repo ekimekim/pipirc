@@ -1,4 +1,12 @@
 
+import signal
+
+import gevent.event
+
+from .ipc import IPCServer
+from .irc import IRCHostsManager
+from .pipserver import PipConnectionServer
+
 
 class Main(object):
 	"""Ties the main parts of the server together"""
@@ -46,17 +54,18 @@ class Main(object):
 	def get_channel_by_token_constant_time(self, token):
 		return None # TODO note to be constant time we need a constant string compare and we can't stop after finding the right answer
 
+	def stop(self):
+		return # TODO graceful shutdown
+
 
 def main(*args):
-	from . import config
 
-	stop = Event()
+	stop = gevent.event.Event()
 	signal.signal(signal.SIGTERM, lambda signum, frame: stop.set())
 
-	config.load_all()
-	store = Store(...?)
-	irc = PipIrc(config, store)
-	server = PippyServer(irc)
+#	config.load_all()
+#	store = Store(...?)
 
+	main = Main()
 	stop.wait()
-	# TODO stop graceful
+	main.stop()

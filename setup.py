@@ -8,8 +8,12 @@ setup(
 	description='A twitch irc bot to interact with Fallout 4',
 	packages=find_packages(),
 	install_requires=[
+		'backoff',
+		'gclient',
 		'gevent',
 		'girc',
+		'gpippy',
+		'gtools',
 		'mrpippy',
 	],
 )

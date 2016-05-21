@@ -1,0 +1,30 @@
+Server process for the Mister Pippy twitch irc bot
+
+It takes incoming tcp connections and talks the Fallout 4 Pip-boy Companion App protocol
+through them as a client (the client-as-a-server arrangement is to NAT-punch).
+
+Upon connecting, it authenticates the connection with a security token then connects
+to the configured respective twitch chat, and accepts commands in that chat to affect the game.
+
+Since the pip boy app can be CPU-intensive at times, we farm out the actual bot logic
+and pip connection processing to worker processes.
+
+All IRC communication is tunneled through the main process as this lets us keep a better
+handle on things like global rate limits.
+
+The master and worker processes communicate over unix sockets (so they can transfer new FDs)
+with a simple newline-seperated-json message protocol.
+
+The application is broadly split into components:
+	ipc - Communication between master and workers
+	irc - Communication between master and twitch chat servers
+	pipserver - Accepting and authenticating new pip-boy connections
+	TODO more: config, bot itself
+These components don't directly interact, but make calls out to the Main class which manages
+cross-communication.
+
+Uses the following libraries:
+	gevent (https://github.com/surfly/gevent) - Thread-like coroutine-based async framework
+	girc (https://github.com/ekimekim/girc) - gevent-based IRC library with twitch support
+	mrpippy and gpippy (https://github.com/ekimekim/mrpippy) - Pip Boy protocol client library
+	various micro-libraries (https://github.com/ekimekim/pylibs) - Various (mostly-gevent-related) minor bits

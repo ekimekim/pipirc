@@ -1,4 +1,14 @@
 
+from uuid import uuid4
+from socket import AF_UNIX, AF_INET, SOCK_STREAM
+import json
+import socket
+
+from gevent.pool import Group
+
+from gclient import GSocketClient
+from gtools import send_fd, recv_fd
+
 
 class IPCServer(object):
 	def __init__(self, main):
@@ -48,17 +58,17 @@ class IPCServer(object):
 
 class IPCConnection(GSocketClient):
 	def __init__(self, socket):
-		super(SubConnection, self).__init__()
+		super(IPCConnection, self).__init__()
 		self._socket = socket
 
 	def send(self, type, block=False, **data):
 		"""Send message of given type, with other args.
 		Set 'fd' to an integer fd to send that fd over the wire."""
 		data['type'] = type
-		return super(SubConnection, self).send(data, block=block)
+		return super(IPCConnection, self).send(data, block=block)
 
 	def _send(self, msg):
-		super(SubConnection, self)._send(msg)
+		super(IPCConnection, self)._send(msg)
 		if msg.get('fd') is not None:
 			send_fd(self._socket, msg['fd'])
 
@@ -86,7 +96,7 @@ class IPCMasterConnection(IPCConnection):
 		self.channels = set() # set of channels handled by the worker we're connected to
 		self.send('init', name=name)
 		self._handle_map = {
-			'chat message': self._send_chat
+			'chat message': self._send_chat,
 			'close channel': self._close_channel,
 		}
 		self.start()
@@ -95,7 +105,7 @@ class IPCMasterConnection(IPCConnection):
 		super(IPCMasterConnection, self)._stop()
 		for channel in self.channels:
 			self._send_chat(channel, "Something went wrong. Please reconnect.")
-		assert self.server.conns.pop(name) is self
+		assert self.server.conns.pop(self.name) is self
 		self.server.main.sync_channels()
 
 	def open_channel(self, channel, pip_fd, **options):
@@ -112,7 +122,7 @@ class IPCMasterConnection(IPCConnection):
 	def _send_chat(self, channel, text):
 		self.server.main.send_chat(channel, text)
 
-	def recv_chat(self, channel, text, sender, sender_rank)
+	def recv_chat(self, channel, text, sender, sender_rank):
 		self.send('chat message', channel=channel, text=text, sender=sender, sender_rank=sender_rank)
 
 
