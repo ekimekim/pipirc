@@ -1,4 +1,6 @@
 
+import logging
+
 from gevent.server import StreamServer
 
 
@@ -21,9 +23,10 @@ class PipConnectionServer(StreamServer):
 
 	TOKEN_LENGTH = 32
 
-	def __init__(self, main, listener):
+	def __init__(self, main, listener, logger=None):
 		"""listener can be anything that looks like a listen socket or an address
 		parsable by gevent.baseserver.parse_address (eg. (host, port))"""
+		self.logger = (logger or logging.getLogger()).getChild(type(self).__name__)
 		self.main = main
 		super(PipConnectionServer, self).__init__(listener)
 
@@ -40,9 +43,14 @@ class PipConnectionServer(StreamServer):
 			channel = self.main.get_channel_by_token_constant_time(token)
 			if not channel:
 				sock.sendall("Unknown token.\n")
-				sock.close()
+				return
 			sock.sendall("OK\n")
+		except Exception:
+			self.logger.exception("Error in token handshake from address {}".format(address))
+			sock.sendall("Internal server error! We'll get this fixed soon.\n")
+			return
+		try:
 			self.main.open_channel(channel, sock)
 		except Exception:
-			sock.sendall("Internal server error! We'll get this fixed soon.\n")
-			sock.close()
+			self.logger.exception("Error in opening channel {} from address {}".format(channel, address))
+			# since we've already sent the OK, we can't give an error message

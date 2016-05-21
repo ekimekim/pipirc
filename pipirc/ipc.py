@@ -1,10 +1,15 @@
 
 from uuid import uuid4
 from socket import AF_UNIX, AF_INET, SOCK_STREAM
+import logging
 import json
+import random
 import socket
+import subprocess
+import sys
 
 from gevent.pool import Group
+import gevent
 
 from gclient import GSocketClient
 from gtools import send_fd, recv_fd
@@ -13,21 +18,46 @@ from .bot import PippyBot
 
 
 class IPCServer(object):
-	def __init__(self, main):
+	WORKER_RESPAWN_INTERVAL = 1
+
+	def __init__(self, main, num_workers, logger=None):
+		self.logger = (logger or logging.getLogger()).getChild(type(self).__name__)
 		self.sock_path = '/tmp/{}.sock'.format(uuid4())
 		self.main = main
 		self.group = Group()
 		self.listener = socket.socket(AF_UNIX, SOCK_STREAM)
-		self.listener.listen(128)
 		self.listener.bind(self.sock_path)
+		self.listener.listen(128)
 		self.group.spawn(self.run)
 		self.conns = {}
+		for i in range(num_workers):
+			self.group.spawn(self._worker_proc_watchdog)
 
 	def run(self):
 		while True:
 			sock, addr = self.listener.accept()
-			name = uuid4()
-			self.conns[name] = IPCMasterConnection(self, name, sock)
+			IPCMasterConnection(self, sock).start()
+			# will insert itself into conns once it knows its name
+
+	def _worker_proc_watchdog(self):
+		while True:
+			proc = None
+			try:
+				proc = subprocess.Popen([sys.executable, '-m', 'pipirc.ipc', self.sock_path])
+				proc.wait()
+			except Exception:
+				self.logger.exception("Error starting or waiting on subprocess")
+			else:
+				if proc.returncode == 0:
+					return
+				self.logger.error("Subprocess died with exit code {}".format(proc.returncode))
+			finally:
+				if proc and proc.returncode is None:
+					try:
+						proc.kill()
+					except OSError:
+						pass
+			gevent.sleep(self.WORKER_RESPAWN_INTERVAL * random.uniform(0.9, 1.1))
 
 	@property
 	def channels_to_conns(self):
@@ -59,7 +89,10 @@ class IPCServer(object):
 
 
 class IPCConnection(GSocketClient):
-	def __init__(self, socket):
+	name = None
+
+	def __init__(self, socket, logger=None):
+		self.logger = (logger or logging.getLogger()).getChild(type(self).__name__)
 		super(IPCConnection, self).__init__()
 		self._socket = socket
 
@@ -70,6 +103,11 @@ class IPCConnection(GSocketClient):
 		return super(IPCConnection, self).send(data, block=block)
 
 	def _send(self, msg):
+		if hasattr(msg.get('fd'), 'fileno'):
+			# since we might be the last reference preventing msg['fd'] from closing,
+			# we need to hold onto it until after send_fd(). A local var does fine.
+			fileobj = msg['fd']
+			msg['fd'] = fileobj.fileno()
 		super(IPCConnection, self)._send(msg)
 		if msg.get('fd') is not None:
 			send_fd(self._socket, msg['fd'])
@@ -86,29 +124,31 @@ class IPCConnection(GSocketClient):
 			try:
 				self._handle_map[msg_type](**msg)
 			except Exception:
-				# TODO log
-				pass
+				self.logger.exception("Failed to process IPC request of type {!r} with args {!r}".format(msg_type, msg))
 
 
 class IPCMasterConnection(IPCConnection):
-	def __init__(self, server, name, socket):
-		super(IPCMasterConnection, self).__init__(socket)
+	def __init__(self, server, socket, logger=None):
+		super(IPCMasterConnection, self).__init__(socket, logger=logger)
 		self.server = server
-		self.name = name
 		self.channels = set() # set of channels handled by the worker we're connected to
-		self.send('init', name=name)
 		self._handle_map = {
 			'chat message': self._send_chat,
 			'close channel': self._close_channel,
+			'init': self._init,
 		}
-		self.start()
 
 	def _stop(self, ex=None):
 		super(IPCMasterConnection, self)._stop()
 		for channel in self.channels:
 			self._send_chat(channel, "Something went wrong. Please reconnect.")
-		assert self.server.conns.pop(self.name) is self
+		if self.name is not None:
+			assert self.server.conns.pop(self.name) is self
 		self.server.main.sync_channels()
+
+	def _init(self, name):
+		self.name = name
+		self.server.conns[name] = self
 
 	def open_channel(self, channel, pip_fd, **options):
 		"""Send channel info and pip protocol fd for given channel to worker process,
@@ -129,24 +169,29 @@ class IPCMasterConnection(IPCConnection):
 
 
 class IPCWorkerConnection(IPCConnection):
-	def __init__(self, sock_path):
+	def __init__(self, name, sock_path, logger=None):
 		sock = socket.socket(AF_UNIX, SOCK_STREAM)
 		sock.connect(sock_path)
-		super(IPCWorkerConnection, self).__init__(sock)
+		self.parent_logger = logger or logging.getLogger()
+		super(IPCWorkerConnection, self).__init__(sock, logger=self.parent_logger)
 		self.channels = {} # {channel: PippyBot}
+		self.name = name
 		self._handle_map = {
-			'init': self._init,
 			'open channel': self._open_channel,
 			'chat message': self._recv_chat,
+			'quit': self._quit,
 		}
-		self.start()
+		self.init(self.name)
 
-	def _init(self, name):
-		self.name = name
+	def init(self, name):
+		self.send('init', name=name)
+
+	def _quit(self):
+		self.stop()
 
 	def _open_channel(self, channel, fd, **options):
 		pip_sock = socket.fromfd(fd, AF_INET, SOCK_STREAM)
-		self.channels[channel] = PippyBot(self, pip_sock, options)
+		self.channels[channel] = PippyBot(self, channel, pip_sock, options, logger=self.parent_logger)
 
 	def close_channel(self, channel):
 		del self.channels[channel]
@@ -158,3 +203,26 @@ class IPCWorkerConnection(IPCConnection):
 	def _recv_chat(self, channel, text, sender, sender_rank):
 		if channel in self.channels:
 			self.channels[channel].recv_chat(text, sender, sender_rank)
+
+
+def worker_main(sock_path):
+	"""entry point for IPC workers"""
+	import gevent.monkey
+	gevent.monkey.patch_all(subprocess=True)
+
+	import os
+
+	logging.basicConfig(level='DEBUG')
+
+	name = "{}:{}".format(os.getpid(), uuid4())
+	logger = logging.getLogger('pipirc_worker')
+
+	logger.info("Worker {} starting".format(name))
+	conn = IPCWorkerConnection(name, sock_path, logger=logger)
+	conn.start()
+	logger.info("Worker {} started".format(name))
+	conn.wait_for_stop()
+
+
+if __name__ == '__main__':
+	worker_main(*sys.argv[1:])

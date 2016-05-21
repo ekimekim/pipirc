@@ -1,4 +1,5 @@
 
+import multiprocessing
 import signal
 
 import gevent.event
@@ -16,7 +17,7 @@ def constant_time_equal(a, b):
 class Main(object):
 	"""Ties the main parts of the server together"""
 	def __init__(self, listen_address, channels):
-		self.ipc_server = IPCServer(self)
+		self.ipc_server = IPCServer(self, multiprocessing.cpu_count())
 		self.irc_manager = IRCHostsManager(self._recv_chat)
 		self.pip_server = PipConnectionServer(self, listen_address)
 		self.pip_server.start()
@@ -28,10 +29,10 @@ class Main(object):
 		if not channel_config:
 			return
 		self.irc_manager.send(
-			channel_config.irc_host,
-			channel_config.irc_user,
-			channel_config.irc_oauth,
-			channel_config.irc_channel,
+			channel_config['irc_host'],
+			channel_config['irc_user'],
+			channel_config['irc_oauth'],
+			channel_config['irc_channel'],
 			text,
 		)
 
@@ -51,13 +52,14 @@ class Main(object):
 		)
 
 	def open_channel(self, channel_config, pip_sock):
-		self.ipc_server.open_channel(channel_config.name, pip_sock,
+		self.ipc_server.open_channel(channel_config['name'], pip_sock,
 			# TODO per-channel options go here (from channel_config)
 		)
 
 	def get_channel_config(self, channel_name):
 		# will probably change this later
-		return self.channels.get(channel_name)
+		channel, = [channel for channel in self.channels if channel['name'] == channel_name]
+		return channel
 
 	def get_channel_by_token_constant_time(self, token):
 		# will probably change this later
