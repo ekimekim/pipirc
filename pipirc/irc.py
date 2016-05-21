@@ -1,4 +1,6 @@
 
+from itertools import groupby
+
 from gevent.queue import Queue
 from gevent.event import AsyncResult
 
@@ -7,19 +9,80 @@ from backoff import Backoff
 from gclient import GClient
 
 
+def get_sender_rank(channel, tags):
+	"""From twitch tags, return a string message sender rank"""
+	if tags['display-name'].lower() == channel.lower().lstrip('#'):
+		return 'broadcaster'
+	for level in ('mod', 'subscriber'):
+		if tags.get(level) == '1':
+			return level
+	return 'viewer'
+
+
+class IRCHostsManager(object):
+	"""An abstraction around a group of irc clients that provide service to different irc servers.
+	Takes a set of (host, nick, oauth, channel) tuples and automatically manages one actual client
+	per unique (host, nick, oauth).
+	Any PrivMsgs received will be passed to the given callback as (channel, text, sender, sender_rank)
+	"""
+	# NOTE on security: We can't re-use a client for the same (host, nick) with differing oauth
+	# as we'd have no way of knowing if any oauth but the first was valid, which would potentially
+	# let unauthorized users in. In the unusual case where the same nick has more than one oauth
+	# provided and both work, it's a pessimization we can live with.
+
+	def __init__(self, callback):
+		self.clients = {} # {(host, nick, oauth): client}
+		self.callback = callback
+
+	def send(self, host, nick, oauth, channel, msg):
+		self.clients[host, nick, oauth].send(channel, msg)
+
+	def _recv(self, client, msg):
+		# prefer twitch display-name for correct capitalization
+		sender = msg.tags.get('display-name', msg.sender)
+		sender_rank = get_sender_rank(msg.target, msg.tags)
+		self.callback(msg.target, msg.payload, sender, sender_rank)
+
+	def update_connections(self, connections):
+		"""Channels should be a set of (host, nick, oauth, channel)"""
+		connections = {
+			(host, nick, oauth): set(channel for _, _, _, channel in items)
+			for (host, nick, oauth), items in groupby(connections, lambda item: item[:3])
+		}
+		for host, nick, oauth in set(connections.keys()) | set(self.clients.keys()):
+			if (host, nick, oauth) not in self.clients:
+				# new connection
+				self.clients[host, nick, oauth] = IRCClientManager(
+					host, nick, self._recv, channels=connections[host, nick, oauth],
+					password=oauth, twitch=True,
+				)
+				self.clients[host, nick, oauth].start()
+			elif (host, nick, oauth) in connections:
+				# existing connection
+				self.clients[host, nick, oauth].update_channels(connections[host, nick, oauth])
+			else:
+				# dead connection
+				self.clients.pop((host, nick, oauth)).stop()
+		assert set(self.clients.keys()) == set(connections.keys()), (
+			"Mismatch after syncing client managers: {!r} keys don't match {!r}".format(
+				self.clients, connections,
+			)
+		)
+
+
 class IRCClientManager(GClient):
 	"""An abstraction around an irc connection that provides automatic reconnects
 	while preserving channel membership and re-enqueuing any messages we know were never sent
 	(so messages may still be lost, but it is less likely).
-	Takes a generic callback for all incoming messages.
+	Takes a generic callback with args (irc_client_manager, msg) for all incoming PrivMsgs.
 	"""
 
-	def __init__(self, host, nick, callback, **irc_kwargs):
+	def __init__(self, host, nick, callback, channels=None, **irc_kwargs):
 		irc_kwargs.update(hostname=host, nick=nick)
 		self.recv_callback = callback
 		self.irc_kwargs = irc_kwargs
 
-		self.channels = set()
+		self.channels = set() if channels is None else channels
 		self._client = AsyncResult()
 		self._recv_queue = Queue()
 
@@ -35,7 +98,7 @@ class IRCClientManager(GClient):
 				client = girc.Client(**self.irc_kwargs)
 				for channel in self.channels:
 					client.channel(channel).join()
-				client.handler(self._client_recv)
+				client.handler(self._client_recv, command=girc.message.Privmsg)
 				self._client.set(client)
 				try:
 					client.start()
@@ -47,7 +110,8 @@ class IRCClientManager(GClient):
 						assert self._client.get() is client
 						self._client = AsyncResult()
 				else:
-					break # graceful exit
+					self.stop() # graceful exit
+					return
 		except Exception as ex:
 			self.stop(ex)
 
@@ -91,7 +155,11 @@ class IRCClientManager(GClient):
 
 	def _receive(self):
 		for msg in self._recv_queue:
-			self.recv_callback(msg)
+			try:
+				self.recv_callback(self, msg)
+			except Exception:
+				# TODO log
+				pass
 
 	def _stop(self, ex):
 		if self._client.ready():
