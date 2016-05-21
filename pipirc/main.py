@@ -75,13 +75,13 @@ class Main(object):
 		return # TODO graceful shutdown
 
 
-def main(*args):
+def main(config_file, *args):
+	import json
 
 	# hard-coded for now, will replace later
 	config = {
 		'listen': ('127.0.0.1', 6066),
-		'channels': {
-		}
+		'channels': json.loads(open(config_file).read()),
 	}
 
 	stop = gevent.event.Event()
