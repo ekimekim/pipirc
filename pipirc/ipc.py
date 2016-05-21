@@ -9,6 +9,8 @@ from gevent.pool import Group
 from gclient import GSocketClient
 from gtools import send_fd, recv_fd
 
+from .bot import PippyBot
+
 
 class IPCServer(object):
 	def __init__(self, main):

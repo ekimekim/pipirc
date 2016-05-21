@@ -8,13 +8,20 @@ from .irc import IRCHostsManager
 from .pipserver import PipConnectionServer
 
 
+def constant_time_equal(a, b):
+	"""Compare two strings in constant time (if they're the same length)"""
+	return len(a) == len(b) and sum(ord(c1) ^ ord(c2) for c1, c2 in zip(a, b)) == 0
+
+
 class Main(object):
 	"""Ties the main parts of the server together"""
-	def __init__(self, listen_address):
+	def __init__(self, listen_address, channels):
 		self.ipc_server = IPCServer(self)
 		self.irc_manager = IRCHostsManager(self._recv_chat)
 		self.pip_server = PipConnectionServer(self, listen_address)
 		self.pip_server.start()
+		# probably going to change this later
+		self.channels = channels
 
 	def send_chat(self, channel_name, text):
 		channel_config = self.get_channel_config(channel_name)
@@ -34,10 +41,10 @@ class Main(object):
 	def sync_channels(self):
 		self.irc_manager.update_connections(
 			(
-				channel_config.irc_host,
-				channel_config.irc_user,
-				channel_config.irc_oauth,
-				channel_config.irc_channel,
+				channel_config['irc_host'],
+				channel_config['irc_user'],
+				channel_config['irc_oauth'],
+				channel_config['irc_channel'],
 			)
 			for channel_config in map(self.get_channel_config, self.ipc_server.channels)
 			if channel_config
@@ -49,10 +56,20 @@ class Main(object):
 		)
 
 	def get_channel_config(self, channel_name):
-		return None # TODO
+		# will probably change this later
+		return self.channels.get(channel_name)
 
 	def get_channel_by_token_constant_time(self, token):
-		return None # TODO note to be constant time we need a constant string compare and we can't stop after finding the right answer
+		# will probably change this later
+		channels = [
+			channel for channel in self.channels
+			if constant_time_equal(channel['token'], token)
+		]
+		if not channels:
+			return
+		assert len(channels) == 1
+		channel, = channels
+		return channel
 
 	def stop(self):
 		return # TODO graceful shutdown
@@ -60,12 +77,16 @@ class Main(object):
 
 def main(*args):
 
+	# hard-coded for now, will replace later
+	config = {
+		'listen': ('127.0.0.1', 6066),
+		'channels': {
+		}
+	}
+
 	stop = gevent.event.Event()
 	signal.signal(signal.SIGTERM, lambda signum, frame: stop.set())
 
-#	config.load_all()
-#	store = Store(...?)
-
-	main = Main()
+	main = Main(config['listen'], config['channels'])
 	stop.wait()
 	main.stop()
