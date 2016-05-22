@@ -196,7 +196,7 @@ class IPCWorkerConnection(IPCConnection):
 
 	def _open_stream(self, stream, fd):
 		pip_sock = socket.fromfd(fd, AF_INET, SOCK_STREAM)
-		self.streams[stream] = PippyBot(self, stream, pip_sock, self.config, logger=self.parent_logger)
+		self.streams[stream] = PippyBot(self, pip_sock, stream, config.streams[stream], logger=self.parent_logger)
 
 	def close_stream(self, stream):
 		del self.streams[stream]
