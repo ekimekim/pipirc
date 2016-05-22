@@ -78,8 +78,8 @@ class IPCServer(object):
 		# approximate least loaded as least channels
 		return min(self.conns.values(), key=lambda conn: len(conn.channels))
 
-	def open_channel(self, channel, pip_sock, **options):
-		self._choose_conn().open_channel(channel, pip_sock, **options)
+	def open_channel(self, channel, pip_sock):
+		self._choose_conn().open_channel(channel, pip_sock)
 
 	def recv_chat(self, channel, text, sender, sender_rank):
 		conn = self.channels_to_conns.get(channel)
@@ -150,12 +150,12 @@ class IPCMasterConnection(IPCConnection):
 		self.name = name
 		self.server.conns[name] = self
 
-	def open_channel(self, channel, pip_fd, **options):
+	def open_channel(self, channel, pip_fd):
 		"""Send channel info and pip protocol fd for given channel to worker process,
 		assigning the channel to this process."""
 		self.channels.add(channel)
 		self.server.main.sync_channels()
-		self.send('open channel', channel=channel, fd=pip_fd, **options)
+		self.send('open channel', channel=channel, fd=pip_fd)
 
 	def _close_channel(self, channel):
 		self.channels.remove(channel)
@@ -169,18 +169,21 @@ class IPCMasterConnection(IPCConnection):
 
 
 class IPCWorkerConnection(IPCConnection):
-	def __init__(self, name, sock_path, logger=None):
-		sock = socket.socket(AF_UNIX, SOCK_STREAM)
-		sock.connect(sock_path)
-		self.parent_logger = logger or logging.getLogger()
-		super(IPCWorkerConnection, self).__init__(sock, logger=self.parent_logger)
-		self.channels = {} # {channel: PippyBot}
+	def __init__(self, name, sock_path, config, logger=None):
 		self.name = name
+		self.channels = {} # {channel: PippyBot}
+		self.config = config
+		self.parent_logger = logger or logging.getLogger()
 		self._handle_map = {
 			'open channel': self._open_channel,
 			'chat message': self._recv_chat,
 			'quit': self._quit,
 		}
+
+		sock = socket.socket(AF_UNIX, SOCK_STREAM)
+		sock.connect(sock_path)
+		super(IPCWorkerConnection, self).__init__(sock, logger=self.parent_logger)
+
 		self.init(self.name)
 
 	def init(self, name):
@@ -189,9 +192,9 @@ class IPCWorkerConnection(IPCConnection):
 	def _quit(self):
 		self.stop()
 
-	def _open_channel(self, channel, fd, **options):
+	def _open_channel(self, channel, fd):
 		pip_sock = socket.fromfd(fd, AF_INET, SOCK_STREAM)
-		self.channels[channel] = PippyBot(self, channel, pip_sock, options, logger=self.parent_logger)
+		self.channels[channel] = PippyBot(self, channel, pip_sock, self.config, logger=self.parent_logger)
 
 	def close_channel(self, channel):
 		del self.channels[channel]
@@ -204,25 +207,3 @@ class IPCWorkerConnection(IPCConnection):
 		if channel in self.channels:
 			self.channels[channel].recv_chat(text, sender, sender_rank)
 
-
-def worker_main(sock_path):
-	"""entry point for IPC workers"""
-	import gevent.monkey
-	gevent.monkey.patch_all(subprocess=True)
-
-	import os
-
-	logging.basicConfig(level='DEBUG')
-
-	name = "{}:{}".format(os.getpid(), uuid4())
-	logger = logging.getLogger('pipirc_worker')
-
-	logger.info("Worker {} starting".format(name))
-	conn = IPCWorkerConnection(name, sock_path, logger=logger)
-	conn.start()
-	logger.info("Worker {} started".format(name))
-	conn.wait_for_stop()
-
-
-if __name__ == '__main__':
-	worker_main(*sys.argv[1:])

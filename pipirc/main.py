@@ -4,6 +4,7 @@ import signal
 
 import gevent.event
 
+from .config import ServiceConfig
 from .ipc import IPCServer
 from .irc import IRCHostsManager
 from .pipserver import PipConnectionServer
@@ -52,9 +53,7 @@ class Main(object):
 		)
 
 	def open_channel(self, channel_config, pip_sock):
-		self.ipc_server.open_channel(channel_config['name'], pip_sock,
-			# TODO per-channel options go here (from channel_config)
-		)
+		self.ipc_server.open_channel(channel_config['name'], pip_sock)
 
 	def get_channel_config(self, channel_name):
 		# will probably change this later
@@ -77,18 +76,14 @@ class Main(object):
 		return # TODO graceful shutdown
 
 
-def main(config_file, *args):
-	import json
+def main(conf_path, *args):
 
-	# hard-coded for now, will replace later
-	config = {
-		'listen': ('127.0.0.1', 6066),
-		'channels': json.loads(open(config_file).read()),
-	}
+	config = ServiceConfig(conf_path)
 
 	stop = gevent.event.Event()
-	signal.signal(signal.SIGTERM, lambda signum, frame: stop.set())
+	for sig in (signal.SIGTERM, signal.SIGINT):
+		signal.signal(sig, lambda signum, frame: stop.set())
 
-	main = Main(config['listen'], config['channels'])
+	main = Main(config.listen, config.channels)
 	stop.wait()
 	main.stop()
