@@ -1,4 +1,5 @@
 
+import logging
 import multiprocessing
 import signal
 
@@ -17,13 +18,13 @@ def constant_time_equal(a, b):
 
 class Main(object):
 	"""Ties the main parts of the server together"""
-	def __init__(self, listen_address, channels):
+	def __init__(self, config):
+		self.config = config
+		self.channels = self.config.channels # probably going to change this later
 		self.ipc_server = IPCServer(self, multiprocessing.cpu_count())
 		self.irc_manager = IRCHostsManager(self._recv_chat)
-		self.pip_server = PipConnectionServer(self, listen_address)
+		self.pip_server = PipConnectionServer(self, self.config.listen)
 		self.pip_server.start()
-		# probably going to change this later
-		self.channels = channels
 
 	def send_chat(self, channel_name, text):
 		channel_config = self.get_channel_config(channel_name)
@@ -78,12 +79,17 @@ class Main(object):
 
 def main(conf_path, *args):
 
+	logger = logging.getLogger("pipirc")
+
 	config = ServiceConfig(conf_path)
+	config.configure_logging()
+
+	logger.info("Starting")
 
 	stop = gevent.event.Event()
-	for sig in (signal.SIGTERM, signal.SIGINT):
-		signal.signal(sig, lambda signum, frame: stop.set())
+	signal.signal(signal.SIGTERM, lambda signum, frame: stop.set())
 
-	main = Main(config.listen, config.channels)
+	main = Main(config)
+	logger.info("Started")
 	stop.wait()
 	main.stop()

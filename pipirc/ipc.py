@@ -42,13 +42,15 @@ class IPCServer(object):
 	def _worker_proc_watchdog(self):
 		while True:
 			proc = None
+			self.logger.info("Starting worker process")
 			try:
-				proc = subprocess.Popen([sys.executable, '-m', 'pipirc.ipc', self.sock_path])
+				proc = subprocess.Popen([sys.executable, '-m', 'pipirc.worker', self.main.config.filepath, self.sock_path])
 				proc.wait()
 			except Exception:
 				self.logger.exception("Error starting or waiting on subprocess")
 			else:
 				if proc.returncode == 0:
+					self.logger.info("Worker cleanly shut down")
 					return
 				self.logger.error("Subprocess died with exit code {}".format(proc.returncode))
 			finally:
