@@ -31,10 +31,10 @@ class Main(object):
 		if not stream_config:
 			return
 		self.irc_manager.send(
-			stream_config['irc_host'],
-			stream_config['irc_user'],
-			stream_config['irc_oauth'],
-			stream_config['irc_channel'],
+			stream_config.irc_host,
+			stream_config.irc_user,
+			stream_config.irc_oauth,
+			stream_config.irc_channel,
 			text,
 		)
 
@@ -44,28 +44,27 @@ class Main(object):
 	def sync_streams(self):
 		self.irc_manager.update_connections(
 			(
-				stream_config['irc_host'],
-				stream_config['irc_user'],
-				stream_config['irc_oauth'],
-				stream_config['irc_channel'],
+				stream_config.irc_host,
+				stream_config.irc_user,
+				stream_config.irc_oauth,
+				stream_config.irc_channel,
 			)
 			for stream_config in map(self.get_stream_config, self.ipc_server.streams)
 			if stream_config
 		)
 
 	def open_stream(self, stream_config, pip_sock):
-		self.ipc_server.open_stream(stream_config['name'], pip_sock)
+		self.ipc_server.open_stream(stream_config.name, pip_sock)
 
 	def get_stream_config(self, stream_name):
 		# will probably change this later
-		stream, = [stream for stream in self.streams if stream['name'] == stream_name]
-		return stream
+		return self.streams[stream_name]
 
-	def get_stream_by_token_constant_time(self, token):
+	def get_stream_by_pip_key_constant_time(self, pip_key):
 		# will probably change this later
 		streams = [
-			stream for stream in self.streams
-			if constant_time_equal(stream['token'], token)
+			stream for stream in self.streams.values()
+			if constant_time_equal(stream.pip_key, pip_key)
 		]
 		if not streams:
 			return

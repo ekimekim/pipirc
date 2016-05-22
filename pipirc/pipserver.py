@@ -32,21 +32,21 @@ class PipConnectionServer(StreamServer):
 
 	def handle(self, sock, address):
 		# The custom protocol here is very simple.
-		# The client opens with 32 bytes of token data.
+		# The client opens with 32 bytes of pip_key data.
 		# Once this is sent, it waits for a response from the server.
 		# The response is terminated by a newline and is one of:
 		#   "OK": The connection can continue, switch to pip protocol data
 		#   otherwise: A human readable error message. The connection will then close.
 		try:
-			token = recv_all(sock, self.TOKEN_LENGTH)
+			pip_key = recv_all(sock, self.TOKEN_LENGTH)
 			# for security, some care must be taken here to be constant-time
-			stream = self.main.get_stream_by_token_constant_time(token)
+			stream = self.main.get_stream_by_pip_key_constant_time(pip_key)
 			if not stream:
-				sock.sendall("Unknown token.\n")
+				sock.sendall("Unknown pip key.\n")
 				return
 			sock.sendall("OK\n")
 		except Exception:
-			self.logger.exception("Error in token handshake from address {}".format(address))
+			self.logger.exception("Error in pip_key handshake from address {}".format(address))
 			sock.sendall("Internal server error! We'll get this fixed soon.\n")
 			return
 		try:
