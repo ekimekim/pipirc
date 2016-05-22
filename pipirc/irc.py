@@ -23,7 +23,8 @@ class IRCHostsManager(object):
 	"""An abstraction around a group of irc clients that provide service to different irc servers.
 	Takes a set of (host, nick, oauth, channel) tuples and automatically manages one actual client
 	per unique (host, nick, oauth).
-	Any PrivMsgs received will be passed to the given callback as (channel, text, sender, sender_rank)
+	Any PrivMsgs received will be passed to the given callback as (stream, text, sender, sender_rank)
+	Note we assume stream name = channel_name.lstrip('#')
 	"""
 	# NOTE on security: We can't re-use a client for the same (host, nick) with differing oauth
 	# as we'd have no way of knowing if any oauth but the first was valid, which would potentially

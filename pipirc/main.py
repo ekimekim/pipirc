@@ -20,58 +20,58 @@ class Main(object):
 	"""Ties the main parts of the server together"""
 	def __init__(self, config):
 		self.config = config
-		self.channels = self.config.channels # probably going to change this later
+		self.streams = self.config.streams # probably going to change this later
 		self.ipc_server = IPCServer(self, multiprocessing.cpu_count())
 		self.irc_manager = IRCHostsManager(self._recv_chat)
 		self.pip_server = PipConnectionServer(self, self.config.listen)
 		self.pip_server.start()
 
-	def send_chat(self, channel_name, text):
-		channel_config = self.get_channel_config(channel_name)
-		if not channel_config:
+	def send_chat(self, stream_name, text):
+		stream_config = self.get_stream_config(stream_name)
+		if not stream_config:
 			return
 		self.irc_manager.send(
-			channel_config['irc_host'],
-			channel_config['irc_user'],
-			channel_config['irc_oauth'],
-			channel_config['irc_channel'],
+			stream_config['irc_host'],
+			stream_config['irc_user'],
+			stream_config['irc_oauth'],
+			stream_config['irc_channel'],
 			text,
 		)
 
-	def _recv_chat(self, channel_name, text, sender, sender_rank):
-		self.ipc_server.recv_chat(channel_name, text, sender, sender_rank)
+	def _recv_chat(self, stream_name, text, sender, sender_rank):
+		self.ipc_server.recv_chat(stream_name, text, sender, sender_rank)
 
-	def sync_channels(self):
+	def sync_streams(self):
 		self.irc_manager.update_connections(
 			(
-				channel_config['irc_host'],
-				channel_config['irc_user'],
-				channel_config['irc_oauth'],
-				channel_config['irc_channel'],
+				stream_config['irc_host'],
+				stream_config['irc_user'],
+				stream_config['irc_oauth'],
+				stream_config['irc_channel'],
 			)
-			for channel_config in map(self.get_channel_config, self.ipc_server.channels)
-			if channel_config
+			for stream_config in map(self.get_stream_config, self.ipc_server.streams)
+			if stream_config
 		)
 
-	def open_channel(self, channel_config, pip_sock):
-		self.ipc_server.open_channel(channel_config['name'], pip_sock)
+	def open_stream(self, stream_config, pip_sock):
+		self.ipc_server.open_stream(stream_config['name'], pip_sock)
 
-	def get_channel_config(self, channel_name):
+	def get_stream_config(self, stream_name):
 		# will probably change this later
-		channel, = [channel for channel in self.channels if channel['name'] == channel_name]
-		return channel
+		stream, = [stream for stream in self.streams if stream['name'] == stream_name]
+		return stream
 
-	def get_channel_by_token_constant_time(self, token):
+	def get_stream_by_token_constant_time(self, token):
 		# will probably change this later
-		channels = [
-			channel for channel in self.channels
-			if constant_time_equal(channel['token'], token)
+		streams = [
+			stream for stream in self.streams
+			if constant_time_equal(stream['token'], token)
 		]
-		if not channels:
+		if not streams:
 			return
-		assert len(channels) == 1
-		channel, = channels
-		return channel
+		assert len(streams) == 1
+		stream, = streams
+		return stream
 
 	def stop(self):
 		return # TODO graceful shutdown

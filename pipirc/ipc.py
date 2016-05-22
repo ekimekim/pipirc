@@ -62,32 +62,32 @@ class IPCServer(object):
 			gevent.sleep(self.WORKER_RESPAWN_INTERVAL * random.uniform(0.9, 1.1))
 
 	@property
-	def channels_to_conns(self):
+	def streams_to_conns(self):
 		ret = {}
 		for conn in self.conns.values():
-			for channel in conn.channels:
-				assert channel not in ret
-				ret[channel] = conn
+			for stream in conn.streams:
+				assert stream not in ret
+				ret[stream] = conn
 		return ret
 
 	@property
-	def channels(self):
-		"""Set of all connected channels"""
-		return set(self.channels_to_conns.keys())
+	def streams(self):
+		"""Set of all connected streams"""
+		return set(self.streams_to_conns.keys())
 
 	def _choose_conn(self):
-		"""Pick a conn to be given a new channel."""
-		# approximate least loaded as least channels
-		return min(self.conns.values(), key=lambda conn: len(conn.channels))
+		"""Pick a conn to be given a new stream."""
+		# approximate least loaded as least streams
+		return min(self.conns.values(), key=lambda conn: len(conn.streams))
 
-	def open_channel(self, channel, pip_sock):
-		self._choose_conn().open_channel(channel, pip_sock)
+	def open_stream(self, stream, pip_sock):
+		self._choose_conn().open_stream(stream, pip_sock)
 
-	def recv_chat(self, channel, text, sender, sender_rank):
-		conn = self.channels_to_conns.get(channel)
+	def recv_chat(self, stream, text, sender, sender_rank):
+		conn = self.streams_to_conns.get(stream)
 		if not conn:
 			return
-		conn.recv_chat(channel, text, sender, sender_rank)
+		conn.recv_chat(stream, text, sender, sender_rank)
 
 
 class IPCConnection(GSocketClient):
@@ -133,51 +133,51 @@ class IPCMasterConnection(IPCConnection):
 	def __init__(self, server, socket, logger=None):
 		super(IPCMasterConnection, self).__init__(socket, logger=logger)
 		self.server = server
-		self.channels = set() # set of channels handled by the worker we're connected to
+		self.streams = set() # set of streams handled by the worker we're connected to
 		self._handle_map = {
 			'chat message': self._send_chat,
-			'close channel': self._close_channel,
+			'close stream': self._close_stream,
 			'init': self._init,
 		}
 
 	def _stop(self, ex=None):
 		super(IPCMasterConnection, self)._stop()
-		for channel in self.channels:
-			self._send_chat(channel, "Something went wrong. Please reconnect.")
+		for stream in self.streams:
+			self._send_chat(stream, "Something went wrong. Please reconnect.")
 		if self.name is not None:
 			assert self.server.conns.pop(self.name) is self
-		self.server.main.sync_channels()
+		self.server.main.sync_streams()
 
 	def _init(self, name):
 		self.name = name
 		self.server.conns[name] = self
 
-	def open_channel(self, channel, pip_fd):
-		"""Send channel info and pip protocol fd for given channel to worker process,
-		assigning the channel to this process."""
-		self.channels.add(channel)
-		self.server.main.sync_channels()
-		self.send('open channel', channel=channel, fd=pip_fd)
+	def open_stream(self, stream, pip_fd):
+		"""Send stream info and pip protocol fd for given stream to worker process,
+		assigning the stream to this process."""
+		self.streams.add(stream)
+		self.server.main.sync_streams()
+		self.send('open stream', stream=stream, fd=pip_fd)
 
-	def _close_channel(self, channel):
-		self.channels.remove(channel)
-		self.server.main.sync_channels()
+	def _close_stream(self, stream):
+		self.streams.remove(stream)
+		self.server.main.sync_streams()
 
-	def _send_chat(self, channel, text):
-		self.server.main.send_chat(channel, text)
+	def _send_chat(self, stream, text):
+		self.server.main.send_chat(stream, text)
 
-	def recv_chat(self, channel, text, sender, sender_rank):
-		self.send('chat message', channel=channel, text=text, sender=sender, sender_rank=sender_rank)
+	def recv_chat(self, stream, text, sender, sender_rank):
+		self.send('chat message', stream=stream, text=text, sender=sender, sender_rank=sender_rank)
 
 
 class IPCWorkerConnection(IPCConnection):
 	def __init__(self, name, sock_path, config, logger=None):
 		self.name = name
-		self.channels = {} # {channel: PippyBot}
+		self.streams = {} # {stream: PippyBot}
 		self.config = config
 		self.parent_logger = logger or logging.getLogger()
 		self._handle_map = {
-			'open channel': self._open_channel,
+			'open stream': self._open_stream,
 			'chat message': self._recv_chat,
 			'quit': self._quit,
 		}
@@ -194,18 +194,18 @@ class IPCWorkerConnection(IPCConnection):
 	def _quit(self):
 		self.stop()
 
-	def _open_channel(self, channel, fd):
+	def _open_stream(self, stream, fd):
 		pip_sock = socket.fromfd(fd, AF_INET, SOCK_STREAM)
-		self.channels[channel] = PippyBot(self, channel, pip_sock, self.config, logger=self.parent_logger)
+		self.streams[stream] = PippyBot(self, stream, pip_sock, self.config, logger=self.parent_logger)
 
-	def close_channel(self, channel):
-		del self.channels[channel]
-		self.send('close channel', channel=channel)
+	def close_stream(self, stream):
+		del self.streams[stream]
+		self.send('close stream', stream=stream)
 
-	def send_chat(self, channel, text):
-		self.send('chat message', channel=channel, text=text)
+	def send_chat(self, stream, text):
+		self.send('chat message', stream=stream, text=text)
 
-	def _recv_chat(self, channel, text, sender, sender_rank):
-		if channel in self.channels:
-			self.channels[channel].recv_chat(text, sender, sender_rank)
+	def _recv_chat(self, stream, text, sender, sender_rank):
+		if stream in self.streams:
+			self.streams[stream].recv_chat(text, sender, sender_rank)
 

@@ -40,8 +40,8 @@ class PipConnectionServer(StreamServer):
 		try:
 			token = recv_all(sock, self.TOKEN_LENGTH)
 			# for security, some care must be taken here to be constant-time
-			channel = self.main.get_channel_by_token_constant_time(token)
-			if not channel:
+			stream = self.main.get_stream_by_token_constant_time(token)
+			if not stream:
 				sock.sendall("Unknown token.\n")
 				return
 			sock.sendall("OK\n")
@@ -50,7 +50,7 @@ class PipConnectionServer(StreamServer):
 			sock.sendall("Internal server error! We'll get this fixed soon.\n")
 			return
 		try:
-			self.main.open_channel(channel, sock)
+			self.main.open_stream(stream, sock)
 		except Exception:
-			self.logger.exception("Error in opening channel {} from address {}".format(channel, address))
+			self.logger.exception("Error in opening stream {} from address {}".format(stream, address))
 			# since we've already sent the OK, we can't give an error message
