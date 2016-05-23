@@ -12,3 +12,24 @@ terms:
 	client: irc meaning
 	stream: a streamer and their channel
 	user: A chat participant
+
+
+----
+
+
+bot framework
+
+split into "features", a feature is generally a single command or response or thing
+features are independently configurable, enablable
+
+subclasses of feature:
+	react_to_chat - call response func when a chat msg is received
+		command - call response func when a specifically structured chat msg is received
+	react_to_pip - call response func when pip data is updated
+
+bare feature allows for more complex things involving tracking state, etc
+
+maybe have decorator behave differently registering a class vs a func?
+
+at bot init time, scan loaded features (instances of feature) and attach them as callbacks as needed
+features do not change past bot init time!
