@@ -28,7 +28,7 @@ class IPCServer(object):
 		self.listener = socket.socket(AF_UNIX, SOCK_STREAM)
 		self.listener.bind(self.sock_path)
 		self.listener.listen(128)
-		self.group.spawn(self.run)
+		self._accept_loop = self.group.spawn(self.run)
 		self.conns = {}
 		for i in range(num_workers):
 			self.group.spawn(self._worker_proc_watchdog)
@@ -89,6 +89,12 @@ class IPCServer(object):
 			return
 		conn.recv_chat(stream, text, sender, sender_rank)
 
+	def stop(self):
+		"""Gracefully stop all workers. Blocks until all workers have completely stopped."""
+		self._accept_loop.kill(block=False)
+		gmap(lambda conn: conn.stop(), self.conns.values())
+		self.group.join()
+
 
 class IPCConnection(GSocketClient):
 	name = None
@@ -143,7 +149,7 @@ class IPCMasterConnection(IPCConnection):
 	def _stop(self, ex=None):
 		super(IPCMasterConnection, self)._stop()
 		for stream in self.streams:
-			self._send_chat(stream, "Something went wrong. Please reconnect.")
+			self._send_chat(stream, "Something went wrong. Attempting to reconnect...")
 		if self.name is not None:
 			assert self.server.conns.pop(self.name) is self
 		self.server.main.sync_streams()
@@ -179,7 +185,6 @@ class IPCWorkerConnection(IPCConnection):
 		self._handle_map = {
 			'open stream': self._open_stream,
 			'chat message': self._recv_chat,
-			'quit': self._quit,
 		}
 
 		sock = socket.socket(AF_UNIX, SOCK_STREAM)
@@ -191,15 +196,12 @@ class IPCWorkerConnection(IPCConnection):
 	def init(self, name):
 		self.send('init', name=name)
 
-	def _quit(self):
-		self.stop()
-
 	def _open_stream(self, stream, fd):
 		pip_sock = socket.fromfd(fd, AF_INET, SOCK_STREAM)
 		self.streams[stream] = PippyBot(self, pip_sock, stream, config.streams[stream], logger=self.parent_logger)
 
 	def close_stream(self, stream):
-		del self.streams[stream]
+		self.streams.pop(stream).stop()
 		self.send('close stream', stream=stream)
 
 	def send_chat(self, stream, text):
@@ -208,4 +210,9 @@ class IPCWorkerConnection(IPCConnection):
 	def _recv_chat(self, stream, text, sender, sender_rank):
 		if stream in self.streams:
 			self.streams[stream].recv_chat(text, sender, sender_rank)
+
+	def _stop(self):
+		super(IPCWorkerConnection, self)._stop()
+		for bot in self.streams.values():
+			bot.stop()
 

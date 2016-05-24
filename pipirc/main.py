@@ -73,7 +73,12 @@ class Main(object):
 		return stream
 
 	def stop(self):
-		return # TODO graceful shutdown
+		# stop accepting new streams
+		self.pip_server.stop()
+		# close existing streams and stop workers
+		self.ipc_server.stop()
+		# finally, we're done with irc
+		self.irc_manager.stop()
 
 
 def main(conf_path, *args):
