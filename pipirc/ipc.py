@@ -20,6 +20,8 @@ from .bot import PippyBot
 class IPCServer(HasLogger):
 	WORKER_RESPAWN_INTERVAL = 1
 
+	stopping = False
+
 	def __init__(self, main, num_workers, logger=None):
 		super(IPCServer, self).__init__(logger=logger)
 		self.sock_path = '/tmp/{}.sock'.format(uuid4())
@@ -34,10 +36,10 @@ class IPCServer(HasLogger):
 			self.group.spawn(self._worker_proc_watchdog)
 
 	def run(self):
-		while True:
+		while not self.stopping:
 			sock, addr = self.listener.accept()
 			self.logger.debug("Accepted sock fd {} from address {}".format(sock.fileno(), addr))
-			IPCMasterConnection(self, sock).start()
+			IPCMasterConnection(self, sock, logger=self.logger).start()
 			# will insert itself into conns once it knows its name
 
 	def _worker_proc_watchdog(self):
@@ -97,7 +99,7 @@ class IPCServer(HasLogger):
 
 	def stop(self):
 		"""Gracefully stop all workers. Blocks until all workers have completely stopped."""
-		self._accept_loop.kill(block=False)
+		self.stopping = True
 		self.logger.debug("Waiting for workers to stop")
 		gmap(lambda conn: conn.stop(), self.conns.values())
 		self.group.join()
@@ -165,7 +167,10 @@ class IPCMasterConnection(IPCConnection):
 
 	def _init(self, name):
 		self.name = name
-		self.server.conns[name] = self
+		if self.server.stopping:
+			self.stop()
+		else:
+			self.server.conns[name] = self
 
 	def open_stream(self, stream, pip_fd):
 		"""Send stream info and pip protocol fd for given stream to worker process,

@@ -24,9 +24,9 @@ class Main(HasLogger):
 		super(Main, self).__init__(logger=logger)
 		self.config = config
 		self.streams = self.config.streams # probably going to change this later
-		self.ipc_server = IPCServer(self, multiprocessing.cpu_count())
-		self.irc_manager = IRCHostsManager(self.ipc_server.recv_chat)
-		self.pip_server = PipConnectionServer(self, self.config.listen)
+		self.ipc_server = IPCServer(self, multiprocessing.cpu_count(), logger=self.logger)
+		self.irc_manager = IRCHostsManager(self.ipc_server.recv_chat, logger=self.logger)
+		self.pip_server = PipConnectionServer(self, self.config.listen, logger=self.logger)
 		self.pip_server.start()
 		self.logger.debug("Initialized")
 

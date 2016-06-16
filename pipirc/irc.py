@@ -70,7 +70,7 @@ class IRCHostsManager(HasLogger):
 				self.logger.info("Starting new irc client for {}@{}".format(nick, host))
 				self.clients[host, nick, oauth] = IRCClientManager(
 					host, nick, self._recv, channels=connections[host, nick, oauth],
-					password=oauth, twitch=True,
+					password=oauth, twitch=True, logger=self.logger,
 				)
 				self.clients[host, nick, oauth].start()
 			elif (host, nick, oauth) in connections:
