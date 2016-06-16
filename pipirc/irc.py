@@ -1,8 +1,10 @@
 
+from collections import defaultdict
 from itertools import groupby
 
-from gevent.queue import Queue
 from gevent.event import AsyncResult
+from gevent.pool import Group
+from gevent.queue import Queue
 
 import girc.message
 from backoff import Backoff
@@ -34,6 +36,7 @@ class IRCHostsManager(object):
 	def __init__(self, callback):
 		self.clients = {} # {(host, nick, oauth): client}
 		self.streams = {} # {stream name: (host, nick, oauth, channel)}
+		self._stopping_clients = Group()
 		self.callback = callback
 
 	def send(self, name, msg):
@@ -58,7 +61,7 @@ class IRCHostsManager(object):
 			(host, nick, oauth): set(channel for name, _, _, _, channel in items)
 			for (host, nick, oauth), items in groupby(connections, lambda item: item[:3])
 		}
-		self.streams = {name: (host, nick, oauth, channel) for name, host, nick, oauth, channel in items}
+		self.streams = {name: (host, nick, oauth, channel) for name, host, nick, oauth, channel in connections}
 		for host, nick, oauth in set(connections.keys()) | set(self.clients.keys()):
 			if (host, nick, oauth) not in self.clients:
 				# new connection
@@ -72,12 +75,20 @@ class IRCHostsManager(object):
 				self.clients[host, nick, oauth].update_channels(connections[host, nick, oauth])
 			else:
 				# dead connection
-				self.clients.pop((host, nick, oauth)).stop()
+				client = self.clients.pop((host, nick, oauth))
+				client.update_channels(set()) # by setting to no channels, ensures client won't call recv callback
+				self._stopping_clients.spawn(client.wait_and_stop)
 		assert set(self.clients.keys()) == set(connections.keys()), (
 			"Mismatch after syncing client managers: {!r} keys don't match {!r}".format(
 				self.clients, connections,
 			)
 		)
+
+	def stop(self):
+		"""Block on all clients messages sent and shut down"""
+		for client in self.clients.values():
+			self._stopping_clients.spawn(client.wait_and_stop)
+		self._stopping_clients.join()
 
 
 class IRCClientManager(GClient):
@@ -93,10 +104,17 @@ class IRCClientManager(GClient):
 		self.irc_kwargs = irc_kwargs
 
 		self.channels = set() if channels is None else channels
+		self.channel_pending = defaultdict(lambda: 0) # {channel: num of pending messages on queue}
 		self._client = AsyncResult()
 		self._recv_queue = Queue()
 
 		super(IRCClientManager, self).__init__()
+
+	@property
+	def all_open_channels(self):
+		"""self.channels is desired channels, self.channel_pending tracks any with unsent messages,
+		actual open channels is a union of the two."""
+		return self.channels | set(self.channel_pending.keys())
 
 	def _start(self):
 		self._client_loop_worker = self.group.spawn(self._client_loop)
@@ -106,7 +124,7 @@ class IRCClientManager(GClient):
 			backoff = Backoff(start=0.1, limit=10, rate=5)
 			while True:
 				client = girc.Client(**self.irc_kwargs)
-				for channel in self.channels:
+				for channel in self.all_open_channels:
 					client.channel(channel).join()
 				client.handler(self._client_recv, command=girc.message.Privmsg)
 				self._client.set(client)
@@ -140,21 +158,24 @@ class IRCClientManager(GClient):
 				self._client = AsyncResult()
 
 	def send(self, channel, text):
+		self.channel_pending[channel] += 1
 		super(IRCClientManager, self).send((channel, text))
 
 	def update_channels(self, new_channels):
-		self.channels = new_channels
 		if not self._client.ready() or self._client.get()._stopping:
 			return # no active connection, we're done
 		client = self._client.get()
-		old_channels = client.joined_channels
-		for channel in old_channels - new_channels:
+		old_channels = self.all_open_channels
+		self.channels = new_channels
+		for channel in old_channels - self.all_open_channels:
 			client.channel(channel).part()
-		for channel in new_channels - old_channels:
+		for channel in new_channels - self.all_open_channels:
 			client.channel(channel).join()
-		assert self.channels == client.joined_channels, "Channel mismatch after sync: {!r} != {!r}".format(self.channels, client.joined_channels)
 
 	def _send(self, msg):
+		if msg == 'stop':
+			self.stop() # does not return
+			assert False
 		channel, text = msg
 		try:
 			girc.message.Privmsg(self.client, channel, text).send(block=True)
@@ -162,14 +183,28 @@ class IRCClientManager(GClient):
 			# we can't be certain the message wasn't sent, so discard it
 			# but at least we know all remaining items in the queue have not been.
 			pass
+		finally:
+			self.channel_pending[channel] -= 1
+			if self.channel_pending[channel] <= 0:
+				del self.channel_pending[channel]
+				if self._client.ready():
+					self._client.get().channel(channel).part()
 
 	def _receive(self):
 		for msg in self._recv_queue:
+			if msg.target not in self.channels:
+				# ignore PMs and messages from channels we're only holding open while we finish sending
+				return
 			try:
 				self.recv_callback(self, msg)
 			except Exception:
 				# TODO log
 				pass
+
+	def wait_and_stop(self):
+		"""Graceful stop. Waits to send all remaining messages."""
+		super(IRCClientManager, self).send('stop')
+		self.wait_for_stop()
 
 	def _stop(self, ex):
 		if self._client.ready():
