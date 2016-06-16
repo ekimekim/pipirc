@@ -1,7 +1,6 @@
 
 from uuid import uuid4
 from socket import AF_UNIX, AF_INET, SOCK_STREAM
-import logging
 import json
 import random
 import socket
@@ -11,17 +10,18 @@ import sys
 from gevent.pool import Group
 import gevent
 
+from classtricks import HasLogger
 from gclient import GSocketClient
 from gtools import send_fd, recv_fd
 
 from .bot import PippyBot
 
 
-class IPCServer(object):
+class IPCServer(HasLogger):
 	WORKER_RESPAWN_INTERVAL = 1
 
 	def __init__(self, main, num_workers, logger=None):
-		self.logger = (logger or logging.getLogger()).getChild(type(self).__name__)
+		super(IPCServer, self).__init__(logger=logger)
 		self.sock_path = '/tmp/{}.sock'.format(uuid4())
 		self.main = main
 		self.group = Group()
@@ -36,6 +36,7 @@ class IPCServer(object):
 	def run(self):
 		while True:
 			sock, addr = self.listener.accept()
+			self.logger.debug("Accepted sock fd {} from address {}".format(sock.fileno(), addr))
 			IPCMasterConnection(self, sock).start()
 			# will insert itself into conns once it knows its name
 
@@ -81,10 +82,15 @@ class IPCServer(object):
 		return min(self.conns.values(), key=lambda conn: len(conn.streams))
 
 	def open_stream(self, stream, pip_sock):
-		self._choose_conn().open_stream(stream, pip_sock)
+		conn = self._choose_conn()
+		conn.open_stream(stream, pip_sock)
+		self.logger.debug("Opening new stream {} onto conn {}".format(stream, conn))
 
 	def recv_chat(self, stream, text, sender, sender_rank):
 		conn = self.streams_to_conns.get(stream)
+		self.logger.debug("Got chat message for stream {} (conn {}): {}({}) says {!r}".format(
+			stream, conn, sender, sender_rank, text
+		))
 		if not conn:
 			return
 		conn.recv_chat(stream, text, sender, sender_rank)
@@ -92,25 +98,27 @@ class IPCServer(object):
 	def stop(self):
 		"""Gracefully stop all workers. Blocks until all workers have completely stopped."""
 		self._accept_loop.kill(block=False)
+		self.logger.debug("Waiting for workers to stop")
 		gmap(lambda conn: conn.stop(), self.conns.values())
 		self.group.join()
 
 
-class IPCConnection(GSocketClient):
+class IPCConnection(HasLogger, GSocketClient):
 	name = None
 
 	def __init__(self, socket, logger=None):
-		self.logger = (logger or logging.getLogger()).getChild(type(self).__name__)
-		super(IPCConnection, self).__init__()
 		self._socket = socket
+		super(IPCConnection, self).__init__(logger=logger)
 
 	def send(self, type, block=False, **data):
 		"""Send message of given type, with other args.
 		Set 'fd' to an integer fd to send that fd over the wire."""
 		data['type'] = type
+		self.logger.debug("Enqueuing {} to be sent".format(data))
 		return super(IPCConnection, self).send(data, block=block)
 
 	def _send(self, msg):
+		self.logger.debug("Sending {}".format(msg))
 		if hasattr(msg.get('fd'), 'fileno'):
 			# since we might be the last reference preventing msg['fd'] from closing,
 			# we need to hold onto it until after send_fd(). A local var does fine.
@@ -127,6 +135,7 @@ class IPCConnection(GSocketClient):
 		msg = json.loads(msg)
 		if 'fd' in msg:
 			msg['fd'] = recv_fd(self._socket)
+		self.logger.debug("Recieved {}".format(msg))
 		msg_type = msg.pop('type')
 		if msg_type in self._handle_map:
 			try:
@@ -181,7 +190,6 @@ class IPCWorkerConnection(IPCConnection):
 		self.name = name
 		self.streams = {} # {stream: PippyBot}
 		self.config = config
-		self.parent_logger = logger or logging.getLogger()
 		self._handle_map = {
 			'open stream': self._open_stream,
 			'chat message': self._recv_chat,
@@ -189,7 +197,7 @@ class IPCWorkerConnection(IPCConnection):
 
 		sock = socket.socket(AF_UNIX, SOCK_STREAM)
 		sock.connect(sock_path)
-		super(IPCWorkerConnection, self).__init__(sock, logger=self.parent_logger)
+		super(IPCWorkerConnection, self).__init__(sock, logger=logger)
 
 		self.init(self.name)
 
@@ -198,7 +206,7 @@ class IPCWorkerConnection(IPCConnection):
 
 	def _open_stream(self, stream, fd):
 		pip_sock = socket.fromfd(fd, AF_INET, SOCK_STREAM)
-		self.streams[stream] = PippyBot(self, pip_sock, stream, config.streams[stream], logger=self.parent_logger)
+		self.streams[stream] = PippyBot(self, pip_sock, stream, config.streams[stream], logger=self.logger)
 
 	def close_stream(self, stream):
 		self.streams.pop(stream).stop()

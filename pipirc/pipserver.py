@@ -1,7 +1,7 @@
 
-import logging
-
 from gevent.server import StreamServer
+
+from classtricks import HasLogger
 
 
 def recv_all(sock, length):
@@ -15,7 +15,7 @@ def recv_all(sock, length):
 	return buf
 
 
-class PipConnectionServer(StreamServer):
+class PipConnectionServer(HasLogger, StreamServer):
 	"""A socket server that accepts connections from a special client,
 	does authentication and hands off the socket to main.
 	"""
@@ -26,9 +26,8 @@ class PipConnectionServer(StreamServer):
 	def __init__(self, main, listener, logger=None):
 		"""listener can be anything that looks like a listen socket or an address
 		parsable by gevent.baseserver.parse_address (eg. (host, port))"""
-		self.logger = (logger or logging.getLogger()).getChild(type(self).__name__)
 		self.main = main
-		super(PipConnectionServer, self).__init__(listener)
+		super(PipConnectionServer, self).__init__(listener, logger=logger)
 
 	def handle(self, sock, address):
 		# The custom protocol here is very simple.
@@ -37,6 +36,7 @@ class PipConnectionServer(StreamServer):
 		# The response is terminated by a newline and is one of:
 		#   "OK": The connection can continue, switch to pip protocol data
 		#   otherwise: A human readable error message. The connection will then close.
+		self.logger.debug("Accepting new connection fd {} from address {}".format(sock.fileno(), address))
 		try:
 			pip_key = recv_all(sock, self.TOKEN_LENGTH)
 			# for security, some care must be taken here to be constant-time
@@ -54,3 +54,4 @@ class PipConnectionServer(StreamServer):
 		except Exception:
 			self.logger.exception("Error in opening stream {} from address {}".format(stream, address))
 			# since we've already sent the OK, we can't give an error message
+		self.logger.debug("Successfully opened stream from address {}".format(address))
