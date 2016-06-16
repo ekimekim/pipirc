@@ -22,28 +22,17 @@ class Main(object):
 		self.config = config
 		self.streams = self.config.streams # probably going to change this later
 		self.ipc_server = IPCServer(self, multiprocessing.cpu_count())
-		self.irc_manager = IRCHostsManager(self._recv_chat)
+		self.irc_manager = IRCHostsManager(self.ipc_server.recv_chat)
 		self.pip_server = PipConnectionServer(self, self.config.listen)
 		self.pip_server.start()
 
 	def send_chat(self, stream_name, text):
-		stream_config = self.get_stream_config(stream_name)
-		if not stream_config:
-			return
-		self.irc_manager.send(
-			stream_config.irc_host,
-			stream_config.irc_user,
-			stream_config.irc_oauth,
-			stream_config.irc_channel,
-			text,
-		)
-
-	def _recv_chat(self, stream_name, text, sender, sender_rank):
-		self.ipc_server.recv_chat(stream_name, text, sender, sender_rank)
+		self.irc_manager.send(stream_name, text)
 
 	def sync_streams(self):
 		self.irc_manager.update_connections(
 			(
+				stream_config.name,
 				stream_config.irc_host,
 				stream_config.irc_user,
 				stream_config.irc_oauth,

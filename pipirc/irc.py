@@ -33,23 +33,32 @@ class IRCHostsManager(object):
 
 	def __init__(self, callback):
 		self.clients = {} # {(host, nick, oauth): client}
+		self.streams = {} # {stream name: (host, nick, oauth, channel)}
 		self.callback = callback
 
-	def send(self, host, nick, oauth, channel, msg):
+	def send(self, name, msg):
+		if name not in self.streams:
+			# shouldn't be able to happen, unless a channel was closed without IPC server knowing?
+			# TODO set self.log
+			self.log.warning("Tried to send message for unknown stream {!r}: {!r}".format(name, msg))
+			return
+		host, nick, oauth, channel = self.streams[name]
 		self.clients[host, nick, oauth].send(channel, msg)
 
 	def _recv(self, client, msg):
 		# prefer twitch display-name for correct capitalization
 		sender = msg.tags.get('display-name', msg.sender)
 		sender_rank = get_sender_rank(msg.target, msg.tags)
-		self.callback(msg.target.lstrip('#'), msg.payload, sender, sender_rank)
+		stream_name = msg.target.lstrip('#') # NOTE: we depend on channel name being #stream-name
+		self.callback(stream_name, msg.payload, sender, sender_rank)
 
 	def update_connections(self, connections):
-		"""Channels should be a set of (host, nick, oauth, channel)"""
+		"""Channels should be a set of (name, host, nick, oauth, channel)"""
 		connections = {
-			(host, nick, oauth): set(channel for _, _, _, channel in items)
+			(host, nick, oauth): set(channel for name, _, _, _, channel in items)
 			for (host, nick, oauth), items in groupby(connections, lambda item: item[:3])
 		}
+		self.streams = {name: (host, nick, oauth, channel) for name, host, nick, oauth, channel in items}
 		for host, nick, oauth in set(connections.keys()) | set(self.clients.keys()):
 			if (host, nick, oauth) not in self.clients:
 				# new connection
