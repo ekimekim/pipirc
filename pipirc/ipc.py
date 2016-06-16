@@ -12,7 +12,7 @@ import gevent
 
 from classtricks import HasLogger
 from gclient import GSocketClient
-from gtools import send_fd, recv_fd
+from gtools import gmap, send_fd, recv_fd
 
 from .bot import PippyBot
 
@@ -211,7 +211,7 @@ class IPCWorkerConnection(IPCConnection):
 
 	def _open_stream(self, stream, fd):
 		pip_sock = socket.fromfd(fd, AF_INET, SOCK_STREAM)
-		self.streams[stream] = PippyBot(self, pip_sock, stream, config.streams[stream], logger=self.logger)
+		self.streams[stream] = PippyBot(self, pip_sock, stream, self.config.streams[stream], logger=self.logger)
 
 	def close_stream(self, stream):
 		self.streams.pop(stream).stop()
