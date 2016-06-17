@@ -9,11 +9,11 @@ setup(
 	packages=find_packages(),
 	install_requires=[
 		'backoff',
+		'classtricks',
 		'gclient',
 		'gevent',
 		'girc',
 		'gpippy',
 		'gtools',
-		'mrpippy',
 	],
 )
