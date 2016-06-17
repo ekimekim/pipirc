@@ -9,6 +9,7 @@ class PippyBot(HasLogger):
 		self.ipc = ipc
 		self.stream_name = stream_name
 		self.config = stream_config
+		# TODO on conn close, stop()
 		self.pippy = gpippy.Client(sock=pip_sock, on_update=self.on_pip_update)
 		self._init_features()
 		self.say("Connecting...")
@@ -24,3 +25,9 @@ class PippyBot(HasLogger):
 
 	def say(self, text):
 		self.ipc.send_chat(self.stream_name, text)
+
+	def stop(self):
+		"""Stop the bot and disconnect from the pip boy"""
+		# TODO stop pippy if pippy not stopping
+		# TODO for each feature with a stop handler, call it
+		# TODO close stream if ipc not stopping

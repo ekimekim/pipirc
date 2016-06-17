@@ -95,6 +95,9 @@ def main(conf_path, *args):
 
 	main = Main(config, logger=logger)
 	logger.info("Started")
-	stop.wait()
+	try:
+		stop.wait()
+	except KeyboardInterrupt:
+		pass
 	main.stop()
 	logger.info("Exiting cleanly")

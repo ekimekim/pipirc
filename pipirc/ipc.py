@@ -47,7 +47,11 @@ class IPCServer(HasLogger):
 			proc = None
 			self.logger.info("Starting worker process")
 			try:
-				proc = subprocess.Popen([sys.executable, '-m', 'pipirc.worker', self.main.config.filepath, self.sock_path])
+				proc = subprocess.Popen([
+					sys.executable,
+					'-m', 'pipirc.worker',
+					self.main.config.filepath, self.sock_path,
+				])
 				proc.wait()
 			except Exception:
 				self.logger.exception("Error starting or waiting on subprocess")
@@ -100,6 +104,7 @@ class IPCServer(HasLogger):
 	def stop(self):
 		"""Gracefully stop all workers. Blocks until all workers have completely stopped."""
 		self.stopping = True
+		self._accept_loop.kill(block=False)
 		self.logger.debug("Waiting for workers to stop")
 		gmap(lambda conn: conn.stop(), self.conns.values())
 		self.group.join()
@@ -166,10 +171,10 @@ class IPCMasterConnection(IPCConnection):
 		self.server.main.sync_streams()
 
 	def _init(self, name):
-		self.name = name
 		if self.server.stopping:
 			self.stop()
 		else:
+			self.name = name
 			self.server.conns[name] = self
 
 	def open_stream(self, stream, pip_fd):
@@ -211,10 +216,14 @@ class IPCWorkerConnection(IPCConnection):
 
 	def _open_stream(self, stream, fd):
 		pip_sock = socket.fromfd(fd, AF_INET, SOCK_STREAM)
-		self.streams[stream] = PippyBot(self, pip_sock, stream, self.config.streams[stream], logger=self.logger)
+		try:
+			self.streams[stream] = PippyBot(self, pip_sock, stream, self.config.streams[stream], logger=self.logger)
+		except Exception as ex:
+			self.logger.critical("Failed to init stream {}, restarting to avoid sync issues".format(stream))
+			self.stop(ex)
 
 	def close_stream(self, stream):
-		self.streams.pop(stream).stop()
+		self.streams.pop(stream)
 		self.send('close stream', stream=stream)
 
 	def send_chat(self, stream, text):
@@ -224,7 +233,7 @@ class IPCWorkerConnection(IPCConnection):
 		if stream in self.streams:
 			self.streams[stream].recv_chat(text, sender, sender_rank)
 
-	def _stop(self):
+	def _stop(self, ex=None):
 		super(IPCWorkerConnection, self)._stop()
 		for bot in self.streams.values():
 			bot.stop()

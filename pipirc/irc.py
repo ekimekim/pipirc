@@ -2,6 +2,7 @@
 from collections import defaultdict
 from itertools import groupby
 
+import gevent
 from gevent.event import AsyncResult
 from gevent.pool import Group
 from gevent.queue import Queue
@@ -58,12 +59,14 @@ class IRCHostsManager(HasLogger):
 
 	def update_connections(self, connections):
 		"""Channels should be a set of (name, host, nick, oauth, channel)"""
+		connections = set(connections)
 		self.logger.debug("Updating streams={} to connections {}".format(self.streams, connections))
+		self.streams = {name: (host, nick, oauth, channel) for name, host, nick, oauth, channel in connections}
 		connections = {
 			(host, nick, oauth): set(channel for name, _, _, _, channel in items)
-			for (host, nick, oauth), items in groupby(connections, lambda item: item[:3])
+			for (host, nick, oauth), items in groupby(connections,
+			                                          lambda (name, host, nick, oauth, channel): (host, nick, oauth))
 		}
-		self.streams = {name: (host, nick, oauth, channel) for name, host, nick, oauth, channel in connections}
 		for host, nick, oauth in set(connections.keys()) | set(self.clients.keys()):
 			if (host, nick, oauth) not in self.clients:
 				# new connection
@@ -144,11 +147,12 @@ class IRCClientManager(HasLogger, GClient):
 					backoff.reset()
 					client.wait_for_stop()
 				except Exception as ex:
-					self.logger.warning("irc connection died", exc_info=True)
+					self.logger.warning("irc connection died, retrying in {}".format(backoff.peek()), exc_info=True)
 					# clear _client if no-one else has
 					if self._client.ready():
 						assert self._client.get() is client
 						self._client = AsyncResult()
+					gevent.sleep(backoff.get())
 				else:
 					self.logger.info("irc connection exited gracefully, stopping")
 					self.stop() # graceful exit
