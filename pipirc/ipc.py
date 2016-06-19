@@ -117,6 +117,10 @@ class IPCConnection(HasLogger, GSocketClient):
 		self._socket = socket
 		super(IPCConnection, self).__init__(logger=logger)
 
+	def __repr__(self):
+		return "<{cls.__name__} {self.name}>".format(self=self, cls=type(self))
+	__str__ = __repr__
+
 	def send(self, type, block=False, **data):
 		"""Send message of given type, with other args.
 		Set 'fd' to an integer fd to send that fd over the wire."""
@@ -218,13 +222,14 @@ class IPCWorkerConnection(IPCConnection):
 		pip_sock = socket.fromfd(fd, AF_INET, SOCK_STREAM)
 		try:
 			self.streams[stream] = PippyBot(self, pip_sock, stream, self.config.streams[stream], logger=self.logger)
-		except Exception as ex:
-			self.logger.critical("Failed to init stream {}, restarting to avoid sync issues".format(stream))
-			self.stop(ex)
+		except Exception:
+			self.logger.exception("Failed to init stream {}".format(stream))
+			self.send('close stream', stream=stream)
 
 	def close_stream(self, stream):
-		self.streams.pop(stream)
-		self.send('close stream', stream=stream)
+		if stream in self.streams:
+			self.streams.pop(stream)
+			self.send('close stream', stream=stream)
 
 	def send_chat(self, stream, text):
 		self.send('chat message', stream=stream, text=text)
@@ -235,6 +240,11 @@ class IPCWorkerConnection(IPCConnection):
 
 	def _stop(self, ex=None):
 		super(IPCWorkerConnection, self)._stop()
+
+		# since our connection is gone, treat the expected master state as having no streams
+		# this ensures we don't try to send any closes, etc.
+		self.streams = {}
+
 		for bot in self.streams.values():
 			bot.stop()
 
