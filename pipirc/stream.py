@@ -48,6 +48,10 @@ class Stream(object):
 		if data:
 			self.logger.warning("Unknown keys in stream data: {!r}".format(data))
 
+	def __repr__(self):
+		return "<{cls.__name__} {self.name}>".format(self=self, cls=type(self))
+	__str__ = __repr__
+
 	@property
 	def irc_channel(self):
 		return '#{}'.format(self.name)
