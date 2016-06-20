@@ -21,6 +21,8 @@ class Stream(object):
 			'authenticate the connection.',
 		'command_prefix':
 			'The character or phrase that must preceed commands. Default is "!", ie. the "foo" command would be "!foo".',
+		'debug':
+			'Set True for extra status messages to be sent to IRC.',
 	}
 
 	DEFAULTS = {
@@ -28,6 +30,7 @@ class Stream(object):
 		'irc_user': None,
 		'irc_oauth': None,
 		'command_prefix': '!',
+		'debug': False,
 	}
 
 	def __init__(self, name, data, global_config, logger=None):
@@ -35,18 +38,17 @@ class Stream(object):
 		self.name = name
 		self.logger = (logger or logging.getLogger()).getChild(type(self).__name__)
 
+		data = data.copy()
 		for key in self.ITEMS:
-			value = data.get(key, self.DEFAULTS[key]) if key in self.DEFAULTS else data[key]
+			value = data.pop(key, self.DEFAULTS[key]) if key in self.DEFAULTS else data.pop(key)
 			setattr(self, key, value)
+		self.features = data
 
 		# special case defaults
 		if not self.irc_user:
 			self.irc_user = self.config.default_irc_user
 		if not self.irc_oauth:
 			self.irc_oauth = self.config.default_irc_oauth
-
-		if data:
-			self.logger.warning("Unknown keys in stream data: {!r}".format(data))
 
 	def __repr__(self):
 		return "<{cls.__name__} {self.name}>".format(self=self, cls=type(self))

@@ -1,6 +1,8 @@
 
 import gpippy
-from classtricks import HasLogger
+from classtricks import HasLogger, get_all_subclasses
+
+from .features import Feature
 
 
 class PippyBot(HasLogger):
@@ -10,12 +12,19 @@ class PippyBot(HasLogger):
 		self.stream_name = stream_name
 		self.config = stream_config
 		self.pippy = gpippy.Client(sock=pip_sock, on_update=self.on_pip_update, on_close=lambda ex: self.stop())
+		self.debug("Starting...")
 		self._init_features()
-		self.say("Connecting...")
+		self.debug("Started")
 
 	def _init_features(self):
 		self.features = []
-		pass # TODO iterate through loaded features, if enabled then register callback
+		for feature in get_all_subclasses(Feature):
+			if feature.name not in self.config.features:
+				continue
+			feature_config = self.config.features[feature.name]
+			if not feature_config.get('enabled', False):
+				continue
+			self.features.append(feature(self, feature_config))
 
 	def recv_chat(self, text, sender, sender_rank):
 		for feature in self.features:
@@ -28,10 +37,19 @@ class PippyBot(HasLogger):
 	def say(self, text):
 		self.ipc.send_chat(self.stream_name, text)
 
+	def debug(self, text):
+		"""Say if debug is True"""
+		if self.config.debug:
+			self.say(text)
+
 	def stop(self):
 		"""Stop the bot and disconnect from the pip boy"""
 		if not self.pippy.closing:
 			self.pippy.close()
 		for feature in self.features:
 			feature.stop()
+		try:
+			self.debug("Disconnected")
+		except Exception:
+			pass
 		self.ipc.close_stream(self.stream_name)
