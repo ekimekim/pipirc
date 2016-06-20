@@ -171,7 +171,7 @@ class Command(object):
 		prefix = self.full_prefix()
 		args = text.strip().split()
 		if args[0] != prefix:
-			continue
+			return
 		args = args[1:]
 
 		config = self.get_config(feature)

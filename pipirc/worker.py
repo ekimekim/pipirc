@@ -10,6 +10,9 @@ import sys
 from .config import ServiceConfig
 from .ipc import IPCWorkerConnection
 
+# This has the side effect of loading all features for later lookup
+from . import features
+
 
 def main(conf_path, sock_path):
 	"""Entry point for IPC workers"""

@@ -2,7 +2,7 @@
 import gpippy
 from classtricks import HasLogger, get_all_subclasses
 
-from .features import Feature
+from .feature import Feature
 
 
 class PippyBot(HasLogger):
