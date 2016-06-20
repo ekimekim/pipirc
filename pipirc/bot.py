@@ -14,13 +14,16 @@ class PippyBot(HasLogger):
 		self.say("Connecting...")
 
 	def _init_features(self):
+		self.features = []
 		pass # TODO iterate through loaded features, if enabled then register callback
 
 	def recv_chat(self, text, sender, sender_rank):
-		pass # TODO
+		for feature in self.features:
+			feature.recv_chat(text, sender, sender_rank)
 
 	def on_pip_update(self, updates):
-		pass #TODO
+		for feature in self.features:
+			feature.on_pip_update(updates)
 
 	def say(self, text):
 		self.ipc.send_chat(self.stream_name, text)
@@ -29,5 +32,6 @@ class PippyBot(HasLogger):
 		"""Stop the bot and disconnect from the pip boy"""
 		if not self.pippy.closing:
 			self.pippy.close()
-		# TODO for each feature with a stop handler, call it
+		for feature in self.features:
+			feature.stop()
 		self.ipc.close_stream(self.stream_name)
