@@ -1,6 +1,7 @@
 
 import gpippy
 from classtricks import HasLogger, get_all_subclasses
+from mrpippy import Player
 
 from .feature import Feature
 
