@@ -53,3 +53,8 @@ class PippyBot(HasLogger):
 		except Exception:
 			pass
 		self.ipc.close_stream(self.stream_name)
+
+	@property
+	def player(self):
+		# TODO block until ready
+		return Player(self.pippy.pipdata)

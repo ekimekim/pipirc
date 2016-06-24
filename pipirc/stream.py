@@ -21,6 +21,8 @@ class Stream(object):
 			'authenticate the connection.',
 		'command_prefix':
 			'The character or phrase that must preceed commands. Default is "!", ie. the "foo" command would be "!foo".',
+		'currency':
+			'If you have commands that cost channel currency, this is the name of the currency for use in help messages.',
 		'debug':
 			'Set True for extra status messages to be sent to IRC.',
 	}
@@ -31,6 +33,7 @@ class Stream(object):
 		'irc_oauth': None,
 		'command_prefix': '!',
 		'debug': False,
+		'currency': 'points',
 	}
 
 	def __init__(self, name, data, global_config, logger=None):
