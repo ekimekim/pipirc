@@ -98,7 +98,7 @@ class IRCHostsManager(HasLogger):
 		"""Block on all clients messages sent and shut down"""
 		for client in self.clients.values():
 			self._stopping_clients.spawn(client.wait_and_stop)
-		self.logger.debug("Waiting for all clients to finish stopping")
+		self.logger.debug("Waiting for {} clients to finish stopping".format(len(self.clients)))
 		self._stopping_clients.join()
 
 

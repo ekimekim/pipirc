@@ -16,7 +16,8 @@ class PippyBot(HasLogger):
 		self.config = stream_config
 
 		self._data_ready = gevent.event.Event()
-		self.use_item_lock = UseItemLock()
+		self.use_item_lock = UseItemLock(self)
+		# XXX this should happen async as it blocks on initial handshake
 		self.pippy = gpippy.Client(sock=pip_sock, on_update=self.on_pip_update, on_close=lambda ex: self.stop())
 
 		self.debug("Starting...")
@@ -26,11 +27,14 @@ class PippyBot(HasLogger):
 	def _init_features(self):
 		self.features = []
 		for feature in get_all_subclasses(Feature):
+			self.logger.debug("Considering feature {}".format(feature.name))
 			if feature.name not in self.config.features:
 				continue
 			feature_config = self.config.features[feature.name]
+			self.logger.debug("Config for feature {}: {}".format(feature.name, feature_config))
 			if not feature_config.get('enabled', False):
 				continue
+			self.logger.debug("Registering feature {}".format(feature.name))
 			self.features.append(feature(self, feature_config))
 
 	def recv_chat(self, text, sender, sender_rank):
