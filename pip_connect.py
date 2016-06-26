@@ -119,8 +119,6 @@ def discover(timeout=1, repeats=5, port=28000):
 					continue # not a json object, ignore it
 				if any(key not in message for key in ['MachineType', 'addr', 'IsBusy']):
 					continue # missing required keys, ignore it
-				if message['IsBusy'] and not allow_busy:
-					continue # server is busy, ignore it
 				results[message['addr'], message['MachineType']] = message['IsBusy']
 	return set((a, t, b) for (a, t), b in results.items())
 
