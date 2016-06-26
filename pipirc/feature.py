@@ -110,7 +110,7 @@ class Command(object):
 		'mod_only': 'When true, only mods can run the command. Default false.',
 		'sub_only': 'When true, only mods or subs can run the command. Default false.',
 		'cooldown': 'How long after the command is used before it can be used again. Mods ignore cooldowns. '
-		            'Should be a number of seconds.', # TODO
+		            'Should be a number of seconds.',
 		'point_cost': 'If Deepbot integration is configured, setting this value to a number causes the '
 		              'command to cost that much. You may also set this to a map from deepbot user rank numbers '
 		              'to a cost for each rank, or omit a rank to disallow that rank from using the command. '
@@ -120,7 +120,7 @@ class Command(object):
 		'help': 'Help text to display to users for the command. You should generally not need to touch this.',
 		'fail_message': 'Governs how often to post a failure message, eg. "This command is mod-only.". '
 		                'Set to False to never display, True to always display, or a number to display with '
-		                'that many seconds of cooldown. Defaults to True.', # TODO
+		                'that many seconds of cooldown. Defaults to True.',
 	}
 
 	DEFAULTS = {
@@ -131,6 +131,9 @@ class Command(object):
 		'help': None,
 		'fail_message': True,
 	}
+
+	last_used = None
+	last_failed = None
 
 	def __init__(self, fn, name, **config):
 		"""name is the string that triggers this command. All other args are defaults and can be overridden
@@ -176,12 +179,16 @@ class Command(object):
 
 		config = self.get_config(feature)
 		is_mod = sender_rank in ('broadcaster', 'mod')
+		now = time.time()
 
 		try:
 			if config['mod_only'] and not is_mod:
 				raise UserError("This command is mod only.")
 			if config['sub_only'] and not (is_mod or sender_rank == 'subscriber'):
 				raise UserError("This command is sub only.")
+
+			if config['cooldown'] and not is_mod and now - self.last_used < config['cooldown']:
+				raise UserError("This command is on cooldown for the next {} seconds".format(int(now - self.last_used)))
 
 			try:
 				self.fn(feature, sender, sender_rank, *args)
@@ -190,9 +197,13 @@ class Command(object):
 			except Exception:
 				feature.logger.exception("Error while handling command {} from {}({}): {!r}".format(self.name, sender, sender_rank, text))
 				raise UserError("Something went wrong. Try again?")
+			else:
+				self.last_used = now
 		except UserError as ex:
-			# TODO fail cooldown
-			feature.bot.say(str(ex))
+			fail = config['fail_message']
+			if fail is True or now - self.last_failed >= fail:
+				feature.bot.say(str(ex))
+			self.last_failed = now
 
 
 class BoundCommand(object):
