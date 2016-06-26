@@ -16,3 +16,8 @@ class UseBooze(Feature):
 				raise UserError("Sorry, {} is trying to cut back (Not carrying any booze)".format(self.bot.player.name))
 			item = random.choice(booze)
 			self.bot.use_item(item)
+		verb = random.choice([
+			"Chugged", "Shotgunned", "Slammed", "Skulled", "Downed", "Quaffed",
+			"Guzzled", "Swigged", "Scarfed, glass and all,", "Inhaled", "Crushed", "Daintily sipped",
+		])
+		self.bot.say("{} a bottle of {}".format(verb, item.name))

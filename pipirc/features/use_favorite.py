@@ -30,3 +30,4 @@ def use_favorite_slot(bot, index):
 		if item.equipped:
 			raise UserError("Sorry, you can't equip something that's already equipped")
 		bot.use_item(item)
+		bot.say("Used {}".format(item.name))
