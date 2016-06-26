@@ -213,7 +213,7 @@ class IRCClientManager(HasLogger, GClient):
 			))
 			if self.channel_pending[channel] <= 0:
 				del self.channel_pending[channel]
-				if self._client.ready():
+				if self._client.ready() and channel not in self.all_open_channels:
 					self._client.get().channel(channel).part()
 
 	def _receive(self):

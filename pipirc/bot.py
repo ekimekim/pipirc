@@ -17,8 +17,9 @@ class PippyBot(HasLogger):
 
 		self._data_ready = gevent.event.Event()
 		self.use_item_lock = UseItemLock(self)
-		# XXX this should happen async as it blocks on initial handshake
-		self.pippy = gpippy.Client(sock=pip_sock, on_update=self.on_pip_update, on_close=lambda ex: self.stop())
+		self._pippy = gevent.spawn(
+			gpippy.Client, sock=pip_sock, on_update=self.on_pip_update, on_close=lambda ex: self.stop()
+		)
 
 		self.debug("Starting...")
 		self._init_features()
@@ -64,8 +65,10 @@ class PippyBot(HasLogger):
 
 	def stop(self):
 		"""Stop the bot and disconnect from the pip boy"""
-		if not self.pippy.closing:
+		if self._pippy.ready() and not self.pippy.closing:
 			self.pippy.close()
+		else:
+			self._pippy.kill(block=False)
 		for feature in self.features:
 			feature.stop()
 		try:
@@ -73,6 +76,14 @@ class PippyBot(HasLogger):
 		except Exception:
 			pass
 		self.ipc.close_stream(self.stream_name)
+
+	@property
+	def pippy(self):
+		try:
+			return self._pippy.get()
+		except Exception:
+			self.stop()
+			raise
 
 	@property
 	def pipdata(self):
