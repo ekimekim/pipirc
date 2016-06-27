@@ -1,7 +1,10 @@
 
+import time
+
 import gevent.pool
 
-from classtricks import HasLogger, classproperty
+from classtricks import HasLogger, NoOpContext, classproperty
+import deepclient
 
 
 def on_message(fn):
@@ -112,11 +115,7 @@ class Command(object):
 		'cooldown': 'How long after the command is used before it can be used again. Mods ignore cooldowns. '
 		            'Should be a number of seconds.',
 		'point_cost': 'If Deepbot integration is configured, setting this value to a number causes the '
-		              'command to cost that much. You may also set this to a map from deepbot user rank numbers '
-		              'to a cost for each rank, or omit a rank to disallow that rank from using the command. '
-		              'For example, {"2": 10, "3": 0} would indicate that rank 1 users can\'t use the command, '
-		              'rank 2 users can use it at a 10 point cost, and rank 3 can use it for free. Mods can '
-		              'always use a command, and default to free if omitted.', # TODO
+		              'command to cost that much.',
 		'help': 'Help text to display to users for the command. You should generally not need to touch this.',
 		'fail_message': 'Governs how often to post a failure message, eg. "This command is mod-only.". '
 		                'Set to False to never display, True to always display, or a number to display with '
@@ -190,8 +189,16 @@ class Command(object):
 			if config['cooldown'] and not is_mod and now - self.last_used < config['cooldown']:
 				raise UserError("This command is on cooldown for the next {} seconds".format(int(now - self.last_used)))
 
+			if config['point_cost'] and self.bot.deepbot:
+				cost_wrapper = self.deepbot.escrow(sender, config['point_cost'])
+			else: # any further bot integrations should go here
+				cost_wrapper = NoOpContext()
+
 			try:
-				self.fn(feature, sender, sender_rank, *args)
+				with cost_wrapper:
+					self.fn(feature, sender, sender_rank, *args)
+			except (deepclient.UserNotFound, deepclient.NotEnoughPoints):
+				raise UserError("Not enough points for that command (need {})".format(config['point_cost']))
 			except TypeError:
 				raise UserError("Wrong number of args for command.")
 			except Exception:

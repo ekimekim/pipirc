@@ -1,9 +1,10 @@
 
 import gevent.event
 
-import gpippy
 from classtricks import HasLogger, get_all_subclasses
 from mrpippy.data import Inventory, Player
+import deepclient
+import gpippy
 
 from .feature import Feature, UserError
 
@@ -20,6 +21,12 @@ class PippyBot(HasLogger):
 		self._pippy = gevent.spawn(
 			gpippy.Client, sock=pip_sock, on_update=self.on_pip_update, on_close=lambda ex: self.stop()
 		)
+		if self.config['deepbot_url']:
+			self._deepbot = gevent.spawn(
+				deepclient.DeepClient(self.config['deepbot_url'], self.config['deepbot_secret'])
+			)
+		else:
+			self._deepbot = None
 
 		self.debug("Starting...")
 		self._init_features()
@@ -76,6 +83,12 @@ class PippyBot(HasLogger):
 		except Exception:
 			pass
 		self.ipc.close_stream(self.stream_name)
+
+	@property
+	def deepbot(self):
+		if not self._deepbot:
+			return
+		return self._deepbot.get()
 
 	@property
 	def pippy(self):
