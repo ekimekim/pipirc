@@ -189,17 +189,19 @@ class Command(object):
 			if config['sub_only'] and not (is_mod or sender_rank == 'subscriber'):
 				raise UserError("This command is sub only.")
 
-			if config['cooldown'] and not is_mod and now - self.last_used < config['cooldown']:
-				raise UserError("This command is on cooldown for the next {} seconds".format(int(now - self.last_used)))
+			if config['cooldown'] and not is_mod and self.last_used is not None and now - self.last_used < config['cooldown']:
+				raise UserError("This command is on cooldown for the next {} seconds".format(int(config['cooldown'] - (now - self.last_used))))
 
-			if config['point_cost'] and self.bot.deepbot:
-				cost_wrapper = self.deepbot.escrow(sender, config['point_cost'])
+			if config['point_cost'] and feature.bot.deepbot:
+				cost_wrapper = feature.bot.deepbot.escrow(sender, config['point_cost'])
 			else: # any further bot integrations should go here
 				cost_wrapper = NoOpContext()
 
 			try:
 				with cost_wrapper:
 					self.fn(feature, sender, sender_rank, *args)
+			except UserError:
+				raise # pass upwards
 			except (deepclient.UserNotFound, deepclient.NotEnoughPoints):
 				raise UserError("Not enough points for that command (need {})".format(config['point_cost']))
 			except TypeError:
@@ -211,7 +213,7 @@ class Command(object):
 				self.last_used = now
 		except UserError as ex:
 			fail = config['fail_message']
-			if fail is True or now - self.last_failed >= fail:
+			if fail is True or self.last_failed is None or now - self.last_failed >= fail or is_mod:
 				feature.bot.say(str(ex))
 			self.last_failed = now
 

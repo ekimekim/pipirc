@@ -18,7 +18,7 @@ class ListChems(Feature):
 	@command('chems')
 	def chems(self, sender, sender_rank, *args):
 		"""See a selection of chems the player is carrying"""
-		chems = [item for item in self.bot.inventory.aid if item.name.lower() in item.CHEMS]
+		chems = [item for item in self.bot.inventory.aid if item.name.lower() in item.CHEM_NAMES]
 		if len(chems) > self.limit:
 			chems = random.sample(chems, self.limit)
 		for item in sorted(chems, key=lambda item: item.name):

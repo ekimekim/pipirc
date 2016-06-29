@@ -1,6 +1,8 @@
 
 import random
 
+from mrpippy.data import Item
+
 from ..feature import Feature, UserError, command
 
 
@@ -11,7 +13,7 @@ class UseChem(Feature):
 	def use_chem(self, sender, sender_rank, *name):
 		"""Use the named chem"""
 		name = ' '.join(name)
-		if name.lower() not in self.CHEMS:
+		if name.lower() not in Item.CHEM_NAMES:
 			raise UserError("{} is not a chem we can use".format(name))
 		with self.bot.use_item_lock:
 			matching = [item for item in self.bot.inventory.aid if item.name.lower() == name.lower()]

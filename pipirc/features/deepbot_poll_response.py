@@ -27,7 +27,7 @@ class DeepbotPollResponse(Feature):
 		match = re.match(self.pattern, text)
 		if not match:
 			return
-		slot = match.groups()
+		slot, = match.groups()
 		slot = int(slot)
 
 		try:
