@@ -38,5 +38,5 @@ class Help(Feature):
 			lines.append((sort_points, line))
 
 		lines.sort() # sorts from free to most expensive, then alphabetically
-		for line in lines:
+		for points, line in lines:
 			self.bot.say(line)

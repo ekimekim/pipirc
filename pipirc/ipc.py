@@ -237,6 +237,8 @@ class IPCWorkerConnection(IPCConnection):
 	def _recv_chat(self, stream, text, sender, sender_rank):
 		if stream in self.streams:
 			self.streams[stream].recv_chat(text, sender, sender_rank)
+		else:
+			self.logger.debug("Got chat for unknown stream {} (open: {})".format(stream, self.streams.keys()))
 
 	def _stop(self, ex=None):
 		super(IPCWorkerConnection, self)._stop()

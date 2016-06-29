@@ -9,7 +9,7 @@ class Info(Feature):
 
 	@command('health')
 	def health(self, sender, sender_rank, *args):
-		player = self.player
+		player = self.bot.player
 		limbs = {name: condition * 100 for name, condition in player.limbs.items() if condition < 1}
 		limbs_str = ", ".join("{} {:.0f}%".format(name, condition) for name, condition in limbs.items())
 		if not limbs_str:

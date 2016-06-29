@@ -42,6 +42,8 @@ class Feature(HasLogger):
 		return (set(cls.CONFIG.keys()) - set(cls.DEFAULTS.keys())).issubset(set(config.keys()))
 
 	def __init__(self, bot, config):
+		super(Feature, self).__init__()
+
 		self.bot = bot
 		self.group = gevent.pool.Group()
 		self._message_callbacks = []
@@ -170,8 +172,9 @@ class Command(object):
 		return '{}{}'.format(feature.bot.config.command_prefix, self.name)
 
 	def __call__(self, feature, text, sender, sender_rank):
-		prefix = self.full_prefix()
+		prefix = self.full_prefix(feature)
 		args = text.strip().split()
+		feature.logger.debug("Considering message {} for command {}".format(args, self))
 		if args[0] != prefix:
 			return
 		args = args[1:]

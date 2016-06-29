@@ -23,6 +23,11 @@ def main(conf_path, sock_path):
 	name = "{}:{}".format(os.getpid(), uuid4())
 	logger = logging.getLogger('pipirc.worker').getChild(name)
 
+	# HACK
+	for pippy_logger in ('mrpippy', 'gpippy'):
+		pippy_logger = logging.getLogger(pippy_logger)
+		pippy_logger.setLevel(logging.INFO)
+
 	logger.info("Starting")
 	conn = IPCWorkerConnection(name, sock_path, config, logger=logger)
 	conn.start()

@@ -18,22 +18,25 @@ class PippyBot(HasLogger):
 
 		self._data_ready = gevent.event.Event()
 		self.use_item_lock = UseItemLock(self)
+
+		self.debug("Starting...")
+		self._init_features()
+
 		self._pippy = gevent.spawn(
 			gpippy.Client, host=None, sock=pip_sock, on_update=self.on_pip_update, on_close=lambda ex: self.stop()
 		)
 		if self.config.deepbot_url:
 			self._deepbot = gevent.spawn(
-				deepclient.DeepClient(self.config.deepbot_url, self.config.deepbot_secret)
+				deepclient.DeepClient, self.config.deepbot_url, self.config.deepbot_secret
 			)
 		else:
 			self._deepbot = None
 
-		self.debug("Starting...")
-		self._init_features()
 		self.debug("Started")
 
 	def _init_features(self):
 		self.features = []
+		self.logger.debug("All feature config: {}".format(self.config.features))
 		for feature in get_all_subclasses(Feature):
 			self.logger.debug("Considering feature {}".format(feature.name))
 			if feature.name not in self.config.features:
@@ -46,6 +49,7 @@ class PippyBot(HasLogger):
 			self.features.append(feature(self, feature_config))
 
 	def recv_chat(self, text, sender, sender_rank):
+		self.logger.debug("Got chat message from {}({}): {!r}".format(sender, sender_rank, text))
 		for feature in self.features:
 			feature.recv_chat(text, sender, sender_rank)
 
