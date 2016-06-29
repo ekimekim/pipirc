@@ -19,11 +19,11 @@ class PippyBot(HasLogger):
 		self._data_ready = gevent.event.Event()
 		self.use_item_lock = UseItemLock(self)
 		self._pippy = gevent.spawn(
-			gpippy.Client, sock=pip_sock, on_update=self.on_pip_update, on_close=lambda ex: self.stop()
+			gpippy.Client, host=None, sock=pip_sock, on_update=self.on_pip_update, on_close=lambda ex: self.stop()
 		)
-		if self.config['deepbot_url']:
+		if self.config.deepbot_url:
 			self._deepbot = gevent.spawn(
-				deepclient.DeepClient(self.config['deepbot_url'], self.config['deepbot_secret'])
+				deepclient.DeepClient(self.config.deepbot_url, self.config.deepbot_secret)
 			)
 		else:
 			self._deepbot = None

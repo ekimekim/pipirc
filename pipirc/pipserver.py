@@ -29,6 +29,10 @@ class PipConnectionServer(HasLogger, StreamServer):
 		self.main = main
 		super(PipConnectionServer, self).__init__(listener, logger=logger)
 
+	def do_close(self, *args):
+		# We don't want to close the connection after handle returns, we want to wait until all references are gone
+		pass
+
 	def handle(self, sock, address):
 		# The custom protocol here is very simple.
 		# The client opens with 32 bytes of pip_key data.

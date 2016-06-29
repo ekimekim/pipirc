@@ -90,7 +90,7 @@ class IPCServer(HasLogger):
 	def open_stream(self, stream, pip_sock):
 		conn = self._choose_conn()
 		conn.open_stream(stream, pip_sock)
-		self.logger.debug("Opening new stream {} onto conn {}".format(stream, conn))
+		self.logger.debug("Opening new stream {} onto conn {} with sock {}".format(stream, conn, pip_sock))
 
 	def recv_chat(self, stream, text, sender, sender_rank):
 		conn = self.streams_to_conns.get(stream)
