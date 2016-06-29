@@ -158,7 +158,7 @@ def load_config():
 		if len(pip_key) == 32:
 			break
 		print "That doesn't look right. A pip key should be exactly 32 characters."
-	if raw_input("Should I save this for next time? (y/N) > ").lower().startwith('y'):
+	if raw_input("Should I save this for next time? (y/N) > ").lower().startswith('y'):
 		try:
 			with open(CONF_FILE, 'w') as f:
 				f.write(pip_key + '\n')
