@@ -5,7 +5,8 @@ from ..feature import Feature, BoundCommand, command
 class Help(Feature):
 	"""Adds the help command"""
 
-	@command('help')
+	# TODO option of what command name somehow?
+	@command('piphelp')
 	def help(self, sender, sender_rank, *args):
 		commands = [
 			method
