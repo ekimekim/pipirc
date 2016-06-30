@@ -23,7 +23,7 @@ class PippyBot(HasLogger):
 		self._init_features()
 
 		self._pippy = gevent.spawn(
-			gpippy.Client, host=None, sock=pip_sock, on_update=self.on_pip_update, on_close=lambda ex: self.stop()
+			self._stop_on_fail, gpippy.Client, host=None, sock=pip_sock, on_update=self.on_pip_update, on_close=lambda ex: self.stop()
 		)
 		if self.config.deepbot_url:
 			self._deepbot = gevent.spawn(
@@ -33,6 +33,12 @@ class PippyBot(HasLogger):
 			self._deepbot = None
 
 		self.debug("Started")
+
+	def _stop_on_fail(self, fn, *args, **kwargs):
+		try:
+			fn(*args, **kwargs)
+		except Exception:
+			self.stop()
 
 	def _init_features(self):
 		self.features = []
