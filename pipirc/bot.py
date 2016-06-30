@@ -148,14 +148,16 @@ class UseItemLock(gevent.lock.RLock):
 
 	def acquire(self):
 		super(UseItemLock, self).acquire()
-		if self._count == 1:
-			# on first acquire, block until we can use item
-			self._use_item_waiter = gevent.event.AsyncResult()
-			self.check()
-			self._use_item_waiter.wait()
-			if not self._use_item_waiter.successful():
-				self.release()
-				self._use_item_waiter.get() # raise
+		try:
+			if self._count == 1:
+				# on first acquire, block until we can use item
+				self._use_item_waiter = gevent.event.AsyncResult()
+				self.check()
+				self._use_item_waiter.get() # wait until success or raise
+		except BaseException:
+			# upon exception, it's a failure to acquire, so we need to make sure we aren't acquired
+			self.release()
+			raise
 
 	def reset(self):
 		if self._use_item_waiter:

@@ -7,6 +7,8 @@ import logging
 import os
 import sys
 
+from gtools import backdoor
+
 from .config import ServiceConfig
 from .ipc import IPCWorkerConnection
 
@@ -22,6 +24,8 @@ def main(conf_path, sock_path):
 
 	name = "{}:{}".format(os.getpid(), uuid4())
 	logger = logging.getLogger('pipirc.worker').getChild(name)
+
+	backdoor(2000 + os.getpid() % 100)
 
 	# HACK
 	for pippy_logger in ('mrpippy', 'gpippy'):
