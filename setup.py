@@ -15,5 +15,6 @@ setup(
 		'girc',
 		'gpippy',
 		'gtools',
+		'requests',
 	],
 )
