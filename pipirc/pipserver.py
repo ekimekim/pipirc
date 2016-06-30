@@ -48,6 +48,13 @@ class PipConnectionServer(HasLogger, StreamServer):
 			if not stream:
 				sock.sendall("Unknown pip key.\n")
 				return
+			if self.main.is_stream_open(stream):
+				sock.sendall(
+					"You appear to already be connected.\n"
+					"It's possible this is a zombie connection and will disappear soon.\n"
+					"Close any other copies of this program, or just try again in a few seconds.\n"
+				)
+				return
 			sock.sendall("OK\n")
 		except Exception:
 			self.logger.exception("Error in pip_key handshake from address {}".format(address))

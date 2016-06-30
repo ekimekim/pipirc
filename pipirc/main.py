@@ -53,6 +53,9 @@ class Main(HasLogger):
 		# will probably change this later
 		return self.streams[stream_name]
 
+	def is_stream_open(self, stream_name):
+		return stream_name in self.ipc_server.streams
+
 	def get_stream_by_pip_key_constant_time(self, pip_key):
 		self.logger.debug("Trying to find stream for pip key")
 		# will probably change this later
