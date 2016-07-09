@@ -36,7 +36,7 @@ class PippyBot(HasLogger):
 
 	def _stop_on_fail(self, fn, *args, **kwargs):
 		try:
-			fn(*args, **kwargs)
+			return fn(*args, **kwargs)
 		except Exception:
 			self.stop()
 
