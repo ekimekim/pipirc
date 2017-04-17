@@ -7,6 +7,7 @@ import socket
 import subprocess
 import sys
 
+from gevent.event import Event
 from gevent.pool import Group
 import gevent
 
@@ -32,6 +33,7 @@ class IPCServer(HasLogger):
 		self.listener.listen(128)
 		self._accept_loop = self.group.spawn(self.run)
 		self.conns = {}
+		self._conns_changed = Event()
 		for i in range(num_workers):
 			self.group.spawn(self._worker_proc_watchdog)
 
@@ -84,6 +86,9 @@ class IPCServer(HasLogger):
 
 	def _choose_conn(self):
 		"""Pick a conn to be given a new stream."""
+		# wait for at least one conn to exist
+		while not self.conns:
+			self._conns_changed.wait()
 		# approximate least loaded as least streams
 		return min(self.conns.values(), key=lambda conn: len(conn.streams))
 
@@ -180,6 +185,9 @@ class IPCMasterConnection(IPCConnection):
 		else:
 			self.name = name
 			self.server.conns[name] = self
+			# set then immediately reset so new waiters can wait
+			self.server._conns_changed.set()
+			self.server._conns_changed = Event()
 
 	def open_stream(self, stream, pip_fd):
 		"""Send stream info and pip protocol fd for given stream to worker process,
