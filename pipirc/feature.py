@@ -1,9 +1,11 @@
 
+from .common import annotate_config
+
 import time
 
 import gevent.pool
 
-from classtricks import HasLogger, NoOpContext, classproperty
+from classtricks import HasLogger, NoOpContext, classproperty, get_all_subclasses
 import deepclient
 
 
@@ -65,6 +67,23 @@ class Feature(HasLogger):
 				self._update_callbacks.append(method)
 
 		self.init()
+
+	@classmethod
+	def get_annotated_config(cls, values={}):
+		config = annotate_config(cls.CONFIG, cls.DEFAULTS, values)
+		for attr in dir(cls):
+			command = getattr(cls, attr)
+			if not isinstance(command, Command):
+				continue
+			config[attr] = {'subconfig': command.get_annotated_config(values.get(attr, {}))}
+		return config
+
+	@classmethod
+	def get_all_features_annotated_config(cls, values={}):
+		return {
+			feature.name: feature.get_annotated_config(values.get(feature.name, {}))
+			for feature in get_all_subclasses(Feature)
+		}
 
 	def recv_chat(self, text, sender, sender_rank):
 		for callback in self._message_callbacks:
@@ -163,10 +182,13 @@ class Command(object):
 			return BoundCommand(self, instance)
 		return self
 
-	def get_config(self, feature):
+	def get_config(self, feature_config):
 		config = self.config.copy()
-		config.update(feature.config.get(self.name, {}))
+		config.update(feature_config.get(self.name, {}))
 		return config
+
+	def get_annotated_config(self, values={}):
+		return annotate_config(self.CONFIG, self.config, values)
 
 	def full_prefix(self, feature):
 		return '{}{}'.format(feature.bot.config.command_prefix, self.name)
@@ -179,7 +201,7 @@ class Command(object):
 			return
 		args = args[1:]
 
-		config = self.get_config(feature)
+		config = self.get_config(feature.config)
 		is_mod = sender_rank in ('broadcaster', 'mod')
 		now = time.time()
 

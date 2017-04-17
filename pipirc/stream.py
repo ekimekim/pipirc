@@ -1,4 +1,7 @@
 
+from .feature import Feature
+from .common import annotate_config
+
 from random import SystemRandom
 import logging
 import string
@@ -47,6 +50,7 @@ class Stream(object):
 		self.config = global_config
 		self.name = name
 		self.logger = (logger or logging.getLogger()).getChild(type(self).__name__)
+		self._data = data
 
 		data = data.copy()
 		for key in self.ITEMS:
@@ -73,3 +77,14 @@ class Stream(object):
 		corpus = string.letters + string.digits
 		random = SystemRandom() # use os.urandom as a CPRNG
 		return ''.join(random.choice(corpus) for i in range(32))
+
+	def get_annotated_config(self):
+		"""Get annotated config for this stream, including current values"""
+		return self.get_bare_annotated_config(self._data)
+
+	@classmethod
+	def get_bare_annotated_config(cls, values={}):
+		"""Get annotated config for a generic stream without any values filled"""
+		config = annotate_config(cls.ITEMS, cls.DEFAULTS, values)
+		config.update(Feature.get_all_features_annotated_config(values))
+		return config
