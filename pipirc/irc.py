@@ -51,17 +51,19 @@ class IRCHostsManager(HasLogger):
 		self.clients[host, nick, oauth].send(channel, msg)
 
 	def _recv(self, client, msg):
-		# prefer twitch display-name for correct capitalization
+		# prefer twitch display-name for correct capitalization/internationalization
+		# TODO this may cause mismatch with deepbot users
 		sender = msg.tags.get('display-name', msg.sender)
 		sender_rank = get_sender_rank(msg.target, msg.tags)
 		stream_name = msg.target.lstrip('#') # NOTE: we depend on channel name being #stream-name
 		self.callback(stream_name, msg.payload, sender, sender_rank)
 
 	def update_connections(self, connections):
-		"""Channels should be a set of (name, host, nick, oauth, channel)"""
+		"""Connections should be a set of (name, host, nick, oauth, channel)"""
 		connections = set(connections)
 		self.logger.debug("Updating streams={} to connections {}".format(self.streams, connections))
 		self.streams = {name: (host, nick, oauth, channel) for name, host, nick, oauth, channel in connections}
+		# group connections into {(host, nick, oauth): {channels}}
 		connections = {
 			(host, nick, oauth): set(channel for name, _, _, _, channel in items)
 			for (host, nick, oauth), items in groupby(connections,
