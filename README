@@ -19,7 +19,11 @@ The application is broadly split into components:
 	ipc - Communication between master and workers
 	irc - Communication between master and twitch chat servers
 	pipserver - Accepting and authenticating new pip-boy connections
-	TODO more: config, bot itself
+	stream - Config and storage of stream registrations
+	main - Main program control and component linking for master
+	worker - Main program control for worker
+	bot - Generic bot implementation and helper methods, runs in worker
+	feature - A feature is one thing the bot can do. Features implement the actual business logic and are configurable.
 These components don't directly interact, but make calls out to the Main class which manages
 cross-communication.
 
