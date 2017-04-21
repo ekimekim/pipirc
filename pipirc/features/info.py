@@ -9,6 +9,7 @@ class Info(Feature):
 
 	@command('health')
 	def health(self, sender, sender_rank, *args):
+		"""See player's health, level and limb conditions"""
 		player = self.bot.player
 		limbs = {name: condition * 100 for name, condition in player.limbs.items() if condition < 1}
 		limbs_str = ", ".join("{} {:.0f}%".format(name, condition) for name, condition in limbs.items())
@@ -49,6 +50,7 @@ class Info(Feature):
 
 	@command('special')
 	def special(self, sender, sender_rank, *args):
+		"""See player's SPECIAL stats and any modifiers"""
 		player = self.bot.player
 		names = "STR", "PER", "END", "CHA", "INT", "AGL", "LCK"
 		display = []
