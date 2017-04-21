@@ -37,6 +37,10 @@ class UseChem(Feature):
 			"If {item.name} is wrong, {player.name} doesn't want to be right.",
 			"{player.name} gets their sweet fix of {item.name}",
 		])
+		int_mod = item.effects.get('INT', 0)
+		if int_mod < 0 and self.bot.player.special[4] + int_mod <= 3:
+			# we're looking at the int mod after the effect takes place, which it hasn't yet.
+			fmt = '{}...{{player.name}} not feel much smart now.'.format(fmt.rstrip('.'))
 		if item.name.lower() == 'jet fuel' and random.random() < 0.25:
 			fmt = "{item.name} can't melt {player.name}'s brain!"
 		self.bot.say(fmt.format(player=self.bot.player, item=item))

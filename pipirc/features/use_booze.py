@@ -20,4 +20,11 @@ class UseBooze(Feature):
 			"Chugged", "Shotgunned", "Slammed", "Skulled", "Downed", "Quaffed",
 			"Guzzled", "Swigged", "Scarfed, glass and all,", "Inhaled", "Crushed", "Daintily sipped",
 		])
-		self.bot.say("{} a bottle of {}".format(verb, item.name))
+		text = "{} a bottle of {}".format(verb, item.name)
+		if random.random() < 0.05:
+			text = "{} like it's 2069!".format(text)
+		if 'ice cold' in item.name.lower() and random.random() < 0.5:
+			text = '{}. Gah, too cold, ice-cream headache!'.format(text)
+		if item.name.lower() == 'dirty wastelander' and random.random() < 0.25:
+			text = '{player.name} tastes a {item.name} ;)'.format(player=self.bot.player, item=item)
+		self.bot.say(text)

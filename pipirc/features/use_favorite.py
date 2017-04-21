@@ -30,4 +30,11 @@ def use_favorite_slot(bot, index):
 		if item.equipped:
 			raise UserError("Sorry, you can't equip something that's already equipped")
 		bot.use_item(item)
-		bot.say("Used {}".format(item.name))
+		verb = 'Equipped' if item in bot.inventory.weapons else 'Used'
+		text = "{verb} {item.name}".format(item=item)
+		is_outdoors = not bot.player.value['Map']['CurrCell']
+		if item.ammo_type and not item.ammo:
+			text = '{}, despite having no ammo.'.format(text)
+		elif item.ammo_type.lower() in ('mini nuke', 'missile') and not is_outdoors:
+			text = '{}...indoors. This can only end well.'.format(text)
+		bot.say(text)

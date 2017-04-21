@@ -18,9 +18,10 @@ class ListWeapons(Feature):
 			if ammo is item:
 				# grenades, etc
 				ammo_str = " ({}x)".format(item.count)
-			elif ammo:
-				# firearms
-				ammo_str = " ({ammo.count}x {ammo.name})".format(ammo=ammo)
+			elif item.ammo_type:
+				# firearms - note ammo is None if we have none of it
+				count = ammo.count if ammo else 0
+				ammo_str = " ({count}x {item.ammo_type})".format(item=item, count=count)
 			else:
 				# no ammo: melee, etc
 				ammo_str = ""
