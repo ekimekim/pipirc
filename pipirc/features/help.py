@@ -5,9 +5,10 @@ from ..feature import Feature, BoundCommand, command
 class Help(Feature):
 	"""Adds the help command"""
 
-	# TODO option of what command name somehow?
+	# XXX option of what command name somehow?
 	@command('piphelp')
 	def help(self, sender, sender_rank, *args):
+		"""Display a list of commands and what they do"""
 		commands = [
 			method
 			for feature in self.bot.features
@@ -21,6 +22,9 @@ class Help(Feature):
 
 			if config['mod_only']:
 				continue # hide mod only
+
+			if command.name == self.help.name:
+				continue # don't display the help command itself
 
 			points = config['point_cost']
 			if isinstance(points, dict):

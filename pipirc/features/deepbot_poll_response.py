@@ -7,9 +7,10 @@ from .use_favorite import use_favorite_slot
 
 
 class DeepbotPollResponse(Feature):
-	"""Specialized feature that response to messages like:
+	"""Specialized feature that responds to matching messages by equipping a given favourite slot
+	Default is messages like:
 		'Poll for <poll> has been closed. Winning option was Slot N'
-	by equipping the item in favorite slot N
+	which equips the item in favorite slot N
 	"""
 
 	CONFIG = {
