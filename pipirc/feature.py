@@ -79,7 +79,7 @@ class Feature(HasLogger):
 			command = getattr(cls, attr)
 			if not isinstance(command, Command):
 				continue
-			config[attr] = {'subconfig': command.get_annotated_config(values.get(attr, {}))}
+			config[command.name] = {'subconfig': command.get_annotated_config(values.get(attr, {}))}
 		return config
 
 	@classmethod
