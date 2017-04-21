@@ -71,7 +71,10 @@ class Feature(HasLogger):
 
 	@classmethod
 	def get_annotated_config(cls, values={}):
-		config = annotate_config(cls.CONFIG, cls.DEFAULTS, values)
+		# hack to avoid needing to merge subclass CONFIGs with Feature.CONFIG
+		CONFIG = dict(enabled='Whether to enable this feature', **cls.CONFIG)
+		DEFAULTS = dict(enabled=False, **cls.DEFAULTS)
+		config = annotate_config(CONFIG, DEFAULTS, values)
 		for attr in sorted(dir(cls)):
 			command = getattr(cls, attr)
 			if not isinstance(command, Command):
@@ -82,9 +85,10 @@ class Feature(HasLogger):
 	@classmethod
 	def get_all_features_annotated_config(cls, values={}):
 		result = {
-			feature.name: {'subconfig':
-				feature.get_annotated_config(values.get(feature.name, {}))
-			} for feature in get_all_subclasses(Feature)
+			feature.name: OrderedDict([
+				('help', feature.__doc__.strip().split('\n', 1)[0] if isinstance(feature.__doc__, basestring) else 'No help available'),
+				('subconfig', feature.get_annotated_config(values.get(feature.name, {}))),
+			]) for feature in get_all_subclasses(Feature)
 		}
 		return OrderedDict(sorted(result.items()))
 
