@@ -2,6 +2,7 @@
 from .common import annotate_config
 
 import time
+from collections import OrderedDict
 
 import gevent.pool
 
@@ -71,7 +72,7 @@ class Feature(HasLogger):
 	@classmethod
 	def get_annotated_config(cls, values={}):
 		config = annotate_config(cls.CONFIG, cls.DEFAULTS, values)
-		for attr in dir(cls):
+		for attr in sorted(dir(cls)):
 			command = getattr(cls, attr)
 			if not isinstance(command, Command):
 				continue
@@ -80,10 +81,12 @@ class Feature(HasLogger):
 
 	@classmethod
 	def get_all_features_annotated_config(cls, values={}):
-		return {
-			feature.name: feature.get_annotated_config(values.get(feature.name, {}))
-			for feature in get_all_subclasses(Feature)
+		result = {
+			feature.name: {'subconfig':
+				feature.get_annotated_config(values.get(feature.name, {}))
+			} for feature in get_all_subclasses(Feature)
 		}
+		return OrderedDict(sorted(result.items()))
 
 	def recv_chat(self, text, sender, sender_rank):
 		for callback in self._message_callbacks:

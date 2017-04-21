@@ -1,4 +1,5 @@
 
+from collections import OrderedDict
 
 def annotate_config(helps, defaults, values):
 	"""Produce an 'annotated' config which has the following form:
@@ -9,9 +10,9 @@ def annotate_config(helps, defaults, values):
 		or it may contain exactly one key, 'subconfig', which maps to another annotated config dict
 		which describes config keys that would be nested under that name.
 	"""
-	result = {}
-	for key in helps:
-		item = {'help': helps[key]}
+	result = OrderedDict()
+	for key in sorted(helps):
+		item = OrderedDict({'help': helps[key]})
 		if key in defaults:
 			item['default'] = defaults[key]
 		if key in values:

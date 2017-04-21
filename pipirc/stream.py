@@ -2,6 +2,7 @@
 from .feature import Feature
 from .common import annotate_config
 
+from collections import OrderedDict
 from random import SystemRandom
 import logging
 import string
@@ -86,5 +87,6 @@ class Stream(object):
 	def get_bare_annotated_config(cls, values={}):
 		"""Get annotated config for a generic stream without any values filled"""
 		config = annotate_config(cls.ITEMS, cls.DEFAULTS, values)
+		config = OrderedDict(config) # so that Features are last
 		config.update(Feature.get_all_features_annotated_config(values))
 		return config
