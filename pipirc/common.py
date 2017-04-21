@@ -26,7 +26,9 @@ def deannotate_config(annotated):
 	result = {}
 	for key, annotated_value in annotated.items():
 		if 'subconfig' in annotated_value:
-			result[key] = deannotate_config(annotated_value['subconfig'])
+			subconfig = deannotate_config(annotated_value['subconfig'])
+			if subconfig:
+				result[key] = subconfig
 		elif 'value' in annotated_value:
 			result[key] = annotated_value['value']
 	return result
